@@ -11,8 +11,10 @@ import { Logger } from 'nestjs-pino';
 import basicAuth from 'express-basic-auth';
 import helmet from 'helmet';
 import compression from 'compression';
+import { join } from 'path';
 import { AppModule } from './app.module';
 import { BackendModules } from './backend/module';
+import { LOCAL_UPLOAD_DIR } from './backend/upload/upload.service';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
@@ -44,6 +46,19 @@ async function bootstrap() {
   app.useBodyParser('json', { limit: '10mb' });
   app.useBodyParser('urlencoded', { limit: '10mb', extended: true });
 
+  // Behind nginx / a load balancer: real client IP for rate limits + login history
+  const trustProxy = configService.get<string>('TRUST_PROXY');
+  if (trustProxy) {
+    app.set(
+      'trust proxy',
+      /^\d+$/.test(trustProxy) ? Number(trustProxy) : trustProxy,
+    );
+  }
+
+  app.useStaticAssets(join(process.cwd(), LOCAL_UPLOAD_DIR), {
+    prefix: `/${LOCAL_UPLOAD_DIR}/`,
+  });
+
   app.use(
     ['/swagger/backend'],
     basicAuth({
@@ -65,7 +80,7 @@ async function bootstrap() {
   const backendSwaggerConfig = new DocumentBuilder()
     .setTitle('TapGro Marketing — Admin API')
     .setDescription(
-      'Admin panel APIs: admins, roles, permissions, social platforms and settings.\n\n**Start here:** `POST /api/backend/v1/adminLogin` → Authorize with `backendBearerAuth`.',
+      'Admin panel APIs (`/api/backend/v1`) and public APIs (`/api/public/v1`).\n\n**Start here:** `POST /api/backend/v1/adminLogin` → Authorize with `backendBearerAuth`.',
     )
     .setVersion('1.0')
     .addBearerAuth(
@@ -83,7 +98,8 @@ async function bootstrap() {
     swaggerOptions,
   );
 
-  app.use(helmet());
+  // Allow the panel / websites on other origins to load /uploads images
+  app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
   app.use(compression());
 
   await app.listen(port);

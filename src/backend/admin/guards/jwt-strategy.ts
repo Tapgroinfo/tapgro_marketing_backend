@@ -3,6 +3,7 @@ import { PassportStrategy } from '@nestjs/passport';
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AdminService } from '../admin.service';
+import type { AdminJwtPayload } from '../auth.service';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy, 'adminjwt') {
@@ -17,11 +18,11 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'adminjwt') {
     });
   }
 
-  async validate(payload: { id: string }) {
+  async validate(payload: AdminJwtPayload) {
     const admin = await this.adminService.jwtFindOneById(payload.id);
-    if (!admin) {
+    if (!admin || (admin.tokenVersion || 0) !== (payload.v || 0)) {
       throw new UnauthorizedException(
-        'You are not authorized to perform the operation',
+        'Session is no longer valid. Please log in again.',
       );
     }
     return admin;

@@ -15,7 +15,8 @@ export class SettingsController {
   @Get('settings/public')
   @ApiOperation({
     summary: 'Public settings (no auth)',
-    description: 'Company name and links to privacy policy / terms.',
+    description:
+      'Company name, maintenance mode, app versions, currency/timezone and legal links.',
   })
   getPublic() {
     return this.settingsService.getPublicSettings();
@@ -37,7 +38,7 @@ export class SettingsController {
   @ApiOperation({
     summary: 'Update settings',
     description:
-      'Partial update by section: company, email, legal, socialProvider. Send ******** (or omit) for secrets to keep the stored value.',
+      'Partial update by section: company, email, legal, socialProvider, sms, whatsapp, system. Send ******** (or omit) for secrets to keep the stored value.',
   })
   update(@Body() dto: UpdateSettingsDto, @AuthAdmin() authUser: any) {
     return this.settingsService.update(dto, authUser.id);

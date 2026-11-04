@@ -5,9 +5,15 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { User, UserSchema } from '../../db/schemas/user.schema';
 import { Role, RoleSchema } from '../../db/schemas/role.schema';
 import { PermissionSchema } from '../../db/schemas/permission.schema';
+import {
+  LoginHistory,
+  LoginHistorySchema,
+} from '../../db/schemas/loginHistory.schema';
 import { JwtStrategy } from './guards/jwt-strategy';
 import { AdminController } from './admin.controller';
+import { AuthController } from './auth.controller';
 import { AdminService } from './admin.service';
+import { AuthService } from './auth.service';
 import { resolveAdminAccessExpiresIn } from '../../utils/admin-jwt.constants';
 
 @Module({
@@ -35,10 +41,11 @@ import { resolveAdminAccessExpiresIn } from '../../utils/admin-jwt.constants';
       { name: User.name, schema: UserSchema },
       { name: Role.name, schema: RoleSchema },
       { name: 'Permission', schema: PermissionSchema },
+      { name: LoginHistory.name, schema: LoginHistorySchema },
     ]),
   ],
-  controllers: [AdminController],
-  providers: [AdminService, JwtStrategy],
-  exports: [AdminService, JwtModule],
+  controllers: [AuthController, AdminController],
+  providers: [AdminService, AuthService, JwtStrategy],
+  exports: [AdminService, AuthService, JwtModule],
 })
 export class AdminModule {}

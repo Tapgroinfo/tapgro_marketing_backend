@@ -1,5 +1,8 @@
 # compiled output
 /dist
+
+# local file uploads (when S3 is not configured)
+/uploads
 /node_modules
 /build
 

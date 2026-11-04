@@ -9,6 +9,8 @@ import { Permission } from '../schemas/permission.schema';
 import { Platform } from '../schemas/platform.schema';
 import { PERMISSION_MODULE_DEFINITIONS } from '../../utils/permission-modules.constants';
 import { DEFAULT_PLATFORMS } from '../../utils/platform.constants';
+import { MessageTemplate } from '../schemas/messageTemplate.schema';
+import { DEFAULT_TEMPLATES } from '../../utils/template.constants';
 
 @Injectable()
 export class DbSeederService {
@@ -18,6 +20,8 @@ export class DbSeederService {
     @InjectModel('Permission')
     private readonly permissionModel: Model<Permission>,
     @InjectModel('Platform') private readonly platformModel: Model<Platform>,
+    @InjectModel(MessageTemplate.name)
+    private readonly templateModel: Model<MessageTemplate>,
     private readonly configService: ConfigService,
   ) {}
 
@@ -25,6 +29,22 @@ export class DbSeederService {
     await this.seedPermissions();
     await this.seedRoleAndAdmin();
     await this.seedPlatforms();
+    await this.seedTemplates();
+  }
+
+  /** Inserts missing system templates; never overwrites admin edits. */
+  async seedTemplates() {
+    for (const template of DEFAULT_TEMPLATES) {
+      await this.templateModel.updateOne(
+        { channel: template.channel, slug: template.slug },
+        {
+          $setOnInsert: { subject: '', ...template },
+          $set: { isSystem: true },
+        },
+        { upsert: true },
+      );
+    }
+    console.log(`🌱 ${DEFAULT_TEMPLATES.length} message templates seeded.`);
   }
 
   async seedPermissions() {

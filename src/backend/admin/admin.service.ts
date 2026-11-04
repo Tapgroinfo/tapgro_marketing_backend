@@ -3,38 +3,27 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
-  UnauthorizedException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { JwtService } from '@nestjs/jwt';
-import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
-import { createHash, randomBytes } from 'crypto';
 import { User, UserDocument } from '../../db/schemas/user.schema';
 import { Role } from '../../db/schemas/role.schema';
 import { Permission } from '../../db/schemas/permission.schema';
 import { GlobalService } from '../globalService/global.service';
+import { MessagingService } from '../messaging/messaging.service';
 import { auditAction } from '../../utils/auditActionEnum';
 import { auditActionDes } from '../../utils/auditActionDesEnum';
 import { auditType } from '../../utils/auditTypeEnum';
 import { Pagination } from '../../utils/pagination';
-import {
-  parseDurationToMs,
-  resolveAdminAccessExpiresIn,
-  resolveAdminRefreshExpiresIn,
-} from '../../utils/admin-jwt.constants';
-import { AdminLoginDto } from './dto/AdminLogin.dto';
+import { TEMPLATE_SLUGS } from '../../utils/template.constants';
+import { AuthService } from './auth.service';
+import { SAFE_ADMIN_SELECT, SENSITIVE_ADMIN_FIELDS } from './admin.constants';
 import { AdminCreateDto } from './dto/AdminCreateDto';
 import { UpdateAdminProfileDto } from './dto/UpdateAdminProfileDto';
-import { RefreshTokenDto } from './dto/refreshToken.dto';
 import { UpdateAdminPasswordDto } from './dto/UpdateAdminPasswordDto';
 import { UpdateAdminDto } from './dto/UpdateAdminDto';
 import { UpdateAdminPermissionsDto } from './dto/UpdateAdminPermissionsDto';
-
-interface IUserJwt {
-  id: string;
-}
 
 type RolePermissionRow = {
   module: string;
@@ -50,71 +39,24 @@ type PopulatedRole = {
   permissions?: RolePermissionRow[];
 } | null;
 
-const SAFE_ADMIN_FIELDS = '-password -refresh_token -refresh_token_expires_at';
-
 @Injectable()
 export class AdminService {
   constructor(
     @InjectModel('User') private userModel: Model<User>,
     @InjectModel('Role') private roleModel: Model<Role>,
     @InjectModel('Permission') private permissionModel: Model<Permission>,
-    private jwtService: JwtService,
-    private configService: ConfigService,
     private globalService: GlobalService,
+    private messagingService: MessagingService,
+    private authService: AuthService,
   ) {}
 
-  public async adminLoginServiceFun(adminLoginDto: AdminLoginDto) {
-    const user = await this.findOneByEmail(adminLoginDto.email);
-    if (!user || user.isDeleted) {
-      throw new UnauthorizedException(
-        'User not found. Please contact administrator.',
-      );
-    }
-    if (user.status === false) {
-      throw new UnauthorizedException('Your account is disabled.');
-    }
-    const isPasswordValid = await this.comparePassword(
-      adminLoginDto.password,
-      user.password,
-    );
-    if (!isPasswordValid) {
-      throw new UnauthorizedException('Password is invalid');
-    }
-
-    const lastLogin = new Date();
-    await this.userModel.findByIdAndUpdate(user._id, { lastLogin });
-
-    const userId = user._id.toString();
-    const token = this.generateToken({ id: userId });
-    const refreshTokenData = await this.issueRefreshToken(userId);
-    const roleData = user.role as PopulatedRole;
-
-    return {
-      success: true,
-      message: 'Admin logged in successfully',
-      token,
-      ...refreshTokenData,
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        phone: user.phone,
-        lastLogin,
-        role: roleData ? { id: roleData._id, name: roleData.role } : null,
-      },
-    };
-  }
-
-  public async adminCreateServiceFun(
-    adminCreateDto: AdminCreateDto,
-    current_user_id: string,
-  ) {
-    const findUser = await this.findOneByEmail(adminCreateDto.email);
-    if (findUser) {
+  async adminCreateServiceFun(dto: AdminCreateDto, current_user_id: string) {
+    const email = dto.email.toLowerCase().trim();
+    if (await this.userModel.exists({ email })) {
       throw new ConflictException('User already exists');
     }
     const role = await this.roleModel.findOne({
-      _id: adminCreateDto.role,
+      _id: dto.role,
       isDeleted: false,
     });
     if (!role) {
@@ -122,9 +64,10 @@ export class AdminService {
     }
 
     const admin = await this.userModel.create({
-      ...adminCreateDto,
+      ...dto,
+      email,
       role: role._id,
-      password: await this.hashPassword(adminCreateDto.password),
+      password: await this.authService.hashPassword(dto.password),
       status: true,
       isDeleted: false,
     });
@@ -135,14 +78,17 @@ export class AdminService {
       auditActionDes.ADMIN_CREATED,
       admin,
     );
+    await this.messagingService.sendTemplate({
+      channel: 'email',
+      slug: TEMPLATE_SLUGS.ADMIN_WELCOME,
+      to: admin.email,
+      variables: { name: admin.name, email: admin.email },
+    });
 
     return {
       success: true,
       message: 'Admin created successfully',
-      data: await this.userModel
-        .findById(admin._id)
-        .select(SAFE_ADMIN_FIELDS)
-        .exec(),
+      data: this.toSafeAdmin(admin),
     };
   }
 
@@ -188,51 +134,35 @@ export class AdminService {
     };
   }
 
-  async updateAdminProfileFun(
-    updateAdminProfileDto: UpdateAdminProfileDto,
-    id: string,
-  ) {
-    const admin = await this.userModel.findById(id).exec();
-    if (!admin) {
-      throw new NotFoundException('Admin not found');
+  async updateAdminProfileFun(dto: UpdateAdminProfileDto, id: string) {
+    const admin = await this.findAdminOrFail(id);
+    const email = dto.email.toLowerCase().trim();
+
+    if (email !== admin.email) {
+      await this.assertEmailFree(email, id);
     }
 
-    if (updateAdminProfileDto.email !== admin.email) {
-      const emailExists = await this.userModel.findOne({
-        email: updateAdminProfileDto.email,
-        _id: { $ne: id },
-      });
-      if (emailExists) {
-        throw new ConflictException('Email already in use by another user');
-      }
+    const changes: string[] = [];
+    if (dto.name !== admin.name) {
+      changes.push(`Name changed from ${admin.name} to ${dto.name}`);
+    }
+    if (email !== admin.email) {
+      changes.push(`Email changed from ${admin.email} to ${email}`);
+    }
+    if (dto.phone !== admin.phone) {
+      changes.push(`Phone changed from ${admin.phone} to ${dto.phone}`);
     }
 
-    const changesArray: string[] = [];
-    if (updateAdminProfileDto.name !== admin.name) {
-      changesArray.push(
-        `Name changed from ${admin.name} to ${updateAdminProfileDto.name}`,
-      );
-    }
-    if (updateAdminProfileDto.email !== admin.email) {
-      changesArray.push(
-        `Email changed from ${admin.email} to ${updateAdminProfileDto.email}`,
-      );
-    }
-    if (updateAdminProfileDto.phone !== admin.phone) {
-      changesArray.push(
-        `Phone changed from ${admin.phone} to ${updateAdminProfileDto.phone}`,
-      );
-    }
-
-    admin.name = updateAdminProfileDto.name;
-    admin.email = updateAdminProfileDto.email;
-    admin.phone = updateAdminProfileDto.phone;
+    admin.name = dto.name;
+    admin.email = email;
+    admin.phone = dto.phone;
+    if (dto.image !== undefined) admin.image = dto.image;
     await admin.save();
 
     await this.createAudit(
       id,
       auditAction.UPDATE,
-      changesArray.length > 0 ? changesArray.join(', ') : 'Profile updated',
+      changes.length > 0 ? changes.join(', ') : 'Profile updated',
       admin,
     );
 
@@ -243,38 +173,20 @@ export class AdminService {
     };
   }
 
-  async updateAdminPasswordFun(
-    updateAdminPasswordDto: UpdateAdminPasswordDto,
-    id: string,
-  ) {
-    const admin = await this.userModel.findById(id).exec();
-    if (!admin) {
-      throw new NotFoundException('Admin not found');
-    }
-    if (
-      !(await this.comparePassword(
-        updateAdminPasswordDto.oldPassword,
-        admin.password,
-      ))
-    ) {
+  /** Changes own password, ends other sessions, returns fresh tokens. */
+  async updateAdminPasswordFun(dto: UpdateAdminPasswordDto, id: string) {
+    const admin = await this.findAdminOrFail(id);
+    if (!(await bcrypt.compare(dto.oldPassword, admin.password))) {
       throw new BadRequestException('Incorrect password');
     }
-    if (
-      updateAdminPasswordDto.newPassword !==
-      updateAdminPasswordDto.confirmPassword
-    ) {
+    if (dto.newPassword !== dto.confirmPassword) {
       throw new BadRequestException(
         'New password and confirm password do not match',
       );
     }
 
-    admin.password = await this.hashPassword(
-      updateAdminPasswordDto.newPassword,
-    );
-    admin.refresh_token = null;
-    admin.refresh_token_expires_at = null;
-    await admin.save();
-
+    admin.password = await this.authService.hashPassword(dto.newPassword);
+    await this.authService.clearSession(admin, true);
     await this.createAudit(
       id,
       auditAction.UPDATE,
@@ -284,7 +196,67 @@ export class AdminService {
 
     return {
       success: true,
-      message: 'Admin password updated successfully',
+      message: 'Password updated. Other sessions have been logged out.',
+      ...(await this.authService.issueTokens(admin)),
+    };
+  }
+
+  async setAdminPasswordFun(
+    id: string,
+    newPassword: string,
+    current_user_id: string,
+  ) {
+    if (id === current_user_id) {
+      throw new BadRequestException(
+        'Use change password to update your own password',
+      );
+    }
+    const admin = await this.findAdminOrFail(id);
+    admin.password = await this.authService.hashPassword(newPassword);
+    admin.failedLoginAttempts = 0;
+    admin.lockedUntil = null;
+    await this.authService.clearSession(admin, true);
+
+    await this.createAudit(
+      current_user_id,
+      auditAction.UPDATE,
+      `Password reset by administrator for user ID ${id}`,
+      admin,
+    );
+    return {
+      success: true,
+      message: 'Password updated and all sessions of this admin logged out',
+    };
+  }
+
+  async updateAdminStatusFun(
+    id: string,
+    status: boolean,
+    current_user_id: string,
+  ) {
+    if (id === current_user_id && !status) {
+      throw new BadRequestException('You cannot disable your own account');
+    }
+    const admin = await this.findAdminOrFail(id);
+    admin.status = status;
+    if (status) {
+      admin.failedLoginAttempts = 0;
+      admin.lockedUntil = null;
+      await admin.save();
+    } else {
+      await this.authService.clearSession(admin, true);
+    }
+
+    await this.createAudit(
+      current_user_id,
+      auditAction.UPDATE,
+      `Admin ${status ? 'enabled' : 'disabled'}: user ID ${id}`,
+      admin,
+    );
+    return {
+      success: true,
+      message: `Admin ${status ? 'enabled' : 'disabled'} successfully`,
+      data: this.toSafeAdmin(admin),
     };
   }
 
@@ -292,18 +264,10 @@ export class AdminService {
     if (id === current_user_id) {
       throw new BadRequestException('You cannot delete your own account');
     }
-    const admin = await this.userModel
-      .findOne({ _id: id, isDeleted: false })
-      .exec();
-    if (!admin) {
-      throw new NotFoundException('Admin not found');
-    }
-
+    const admin = await this.findAdminOrFail(id);
     admin.isDeleted = true;
     admin.status = false;
-    admin.refresh_token = null;
-    admin.refresh_token_expires_at = null;
-    await admin.save();
+    await this.authService.clearSession(admin, true);
 
     await this.createAudit(
       current_user_id,
@@ -311,79 +275,17 @@ export class AdminService {
       auditActionDes.ADMIN_DELETED,
       admin,
     );
-
-    return {
-      success: true,
-      message: 'Admin deleted successfully',
-    };
+    return { success: true, message: 'Admin deleted successfully' };
   }
 
-  async refreshTokens(refreshTokenDto: RefreshTokenDto) {
-    const token = refreshTokenDto.refresh_token?.trim();
-    if (!token) {
-      throw new UnauthorizedException('Refresh token is required');
-    }
-
-    const user = await this.userModel
-      .findOne({
-        refresh_token: this.hashToken(token),
-        isDeleted: false,
-        status: { $ne: false },
-      })
-      .exec();
-    if (!user) {
-      throw new UnauthorizedException(
-        'Invalid refresh token. Please log in again.',
-      );
-    }
-
-    const expiresAt = user.refresh_token_expires_at;
-    if (expiresAt && expiresAt.getTime() <= Date.now()) {
-      await this.userModel.findByIdAndUpdate(user._id, {
-        refresh_token: null,
-        refresh_token_expires_at: null,
-      });
-      throw new UnauthorizedException('Session expired. Please log in again.');
-    }
-
-    const accessToken = this.generateToken({ id: user._id.toString() });
-    const accessExpiresIn = this.accessExpiresIn();
-
-    return {
-      success: true,
-      message: 'Token refreshed successfully',
-      token: accessToken,
-      accessToken,
-      refreshToken: token,
-      expiresIn: accessExpiresIn,
-      expiresInSeconds: Math.floor(parseDurationToMs(accessExpiresIn) / 1000),
-    };
-  }
-
-  async adminLogout(adminId: string) {
-    const user = await this.userModel.findOne({
-      _id: adminId,
-      isDeleted: false,
-    });
-    if (!user) {
-      throw new NotFoundException('Admin not found');
-    }
-
-    await this.userModel.findByIdAndUpdate(adminId, {
-      refresh_token: null,
-      refresh_token_expires_at: null,
-    });
-
-    return {
-      success: true,
-      message: 'Logged out successfully',
-    };
-  }
-
-  async findAllAdminsWithPagination(pagination: Pagination) {
+  async findAllAdminsWithPagination(
+    pagination: Pagination & { status?: boolean; roleId?: string },
+  ) {
     const query: Record<string, any> = { isDeleted: false };
+    if (pagination.status !== undefined) query.status = pagination.status;
+    if (pagination.roleId) query.role = pagination.roleId;
     if (pagination.search) {
-      query['$or'] = [
+      query.$or = [
         { name: { $regex: pagination.search, $options: 'i' } },
         { email: { $regex: pagination.search, $options: 'i' } },
         { phone: { $regex: pagination.search, $options: 'i' } },
@@ -394,10 +296,9 @@ export class AdminService {
       model: this.userModel,
       query,
       pagination,
-      select: SAFE_ADMIN_FIELDS,
+      select: SAFE_ADMIN_SELECT,
       populate: 'role',
     });
-
     return {
       success: true,
       totalCount: result.pagination.total,
@@ -410,47 +311,48 @@ export class AdminService {
     dto: UpdateAdminDto,
     current_user_id: string,
   ) {
-    const admin = await this.userModel.findById(id);
-    if (!admin || admin.isDeleted) {
-      throw new NotFoundException('Admin user not found');
-    }
+    const admin = await this.findAdminOrFail(id);
 
-    if (dto.email && dto.email !== admin.email) {
-      const emailExists = await this.userModel.findOne({
-        email: dto.email,
-        _id: { $ne: id },
-      });
-      if (emailExists) {
-        throw new ConflictException('Email already in use by another user');
+    if (dto.email) {
+      const email = dto.email.toLowerCase().trim();
+      if (email !== admin.email) {
+        await this.assertEmailFree(email, id);
+        admin.email = email;
       }
-      admin.email = dto.email;
     }
-
     if (dto.role) {
-      const roleExists = await this.roleModel.findOne({
+      const role = await this.roleModel.findOne({
         _id: dto.role,
         isDeleted: false,
       });
-      if (!roleExists) {
+      if (!role) {
         throw new NotFoundException('Assigned role not found');
       }
-      admin.role = roleExists._id;
+      admin.role = role._id;
     }
-
     if (dto.name !== undefined) admin.name = dto.name;
     if (dto.phone !== undefined) admin.phone = dto.phone;
-    if (dto.status !== undefined) admin.status = dto.status;
     if (dto.permissions !== undefined) admin.permissions = dto.permissions;
 
-    await admin.save();
+    if (dto.status !== undefined && dto.status !== admin.status) {
+      if (id === current_user_id && !dto.status) {
+        throw new BadRequestException('You cannot disable your own account');
+      }
+      admin.status = dto.status;
+      if (!dto.status) {
+        admin.tokenVersion = (admin.tokenVersion || 0) + 1;
+        admin.refresh_token = null;
+        admin.refresh_token_expires_at = null;
+      }
+    }
 
+    await admin.save();
     await this.createAudit(
       current_user_id,
       auditAction.UPDATE,
       `Updated Admin details for user ID ${id}`,
       admin,
     );
-
     return {
       success: true,
       message: 'Admin updated successfully',
@@ -463,11 +365,7 @@ export class AdminService {
     dto: UpdateAdminPermissionsDto,
     current_user_id: string,
   ) {
-    const admin = await this.userModel.findById(id);
-    if (!admin || admin.isDeleted) {
-      throw new NotFoundException('Admin user not found');
-    }
-
+    const admin = await this.findAdminOrFail(id);
     admin.permissions = dto.permissions;
     await admin.save();
 
@@ -477,7 +375,6 @@ export class AdminService {
       `Updated custom permission overrides for user ID ${id}`,
       admin,
     );
-
     return {
       success: true,
       message: 'User permissions updated successfully',
@@ -486,103 +383,67 @@ export class AdminService {
   }
 
   async getAdminPermissionsMatrix(id: string) {
-    const user = await this.userModel.findById(id).populate('role').exec();
-    if (!user || user.isDeleted) {
+    const user = await this.userModel
+      .findOne({ _id: id, isDeleted: false })
+      .populate('role')
+      .exec();
+    if (!user) {
       throw new NotFoundException('Admin user not found');
     }
 
     const allModules = await this.permissionModel
       .find({ isDeleted: false })
       .exec();
-
     const roleObj = user.role as PopulatedRole;
     const rolePermissions = roleObj?.permissions || [];
-    const userDirectPermissions = user.permissions || [];
+    const userPermissions = user.permissions || [];
 
     const data = allModules.map((m) => {
-      const mKey = m.slug.toLowerCase();
-      const roleConfig = rolePermissions.find(
-        (rp) => rp?.module.toLowerCase() === mKey,
+      const key = m.slug.toLowerCase();
+      const fromRole = rolePermissions.find(
+        (rp) => rp?.module.toLowerCase() === key,
       );
-      const userConfig = userDirectPermissions.find(
-        (up) => up?.module.toLowerCase() === mKey,
+      const fromUser = userPermissions.find(
+        (up) => up?.module.toLowerCase() === key,
       );
       return {
-        module: mKey,
-        is_create: !!roleConfig?.is_create || !!userConfig?.is_create,
-        is_view: !!roleConfig?.is_view || !!userConfig?.is_view,
-        is_edit: !!roleConfig?.is_edit || !!userConfig?.is_edit,
-        is_delete: !!roleConfig?.is_delete || !!userConfig?.is_delete,
+        module: key,
+        is_create: !!fromRole?.is_create || !!fromUser?.is_create,
+        is_view: !!fromRole?.is_view || !!fromUser?.is_view,
+        is_edit: !!fromRole?.is_edit || !!fromUser?.is_edit,
+        is_delete: !!fromRole?.is_delete || !!fromUser?.is_delete,
       };
     });
 
-    return {
-      success: true,
-      roleId: roleObj?._id || null,
-      data,
-    };
-  }
-
-  async findOneByEmail(email: string) {
-    return this.userModel
-      .findOne({ email: email?.toLowerCase().trim() })
-      .populate({ path: 'role', select: 'role permissions' })
-      .exec();
+    return { success: true, roleId: roleObj?._id || null, data };
   }
 
   /** Used by JwtStrategy — result becomes `request.user`. */
   async jwtFindOneById(id: string) {
     return this.userModel
       .findOne({ _id: id, isDeleted: false, status: { $ne: false } })
-      .select('_id name email phone role permissions')
+      .select('_id name email phone role permissions tokenVersion')
       .populate('role');
   }
 
-  async comparePassword(enteredPassword: string, dbPassword: string) {
-    return await bcrypt.compare(enteredPassword, dbPassword);
-  }
-
-  private async issueRefreshToken(userId: string) {
-    const refreshExpiresIn = resolveAdminRefreshExpiresIn(
-      this.configService.get<string>('ADMIN_JWT_REFRESH_EXPIRES_IN'),
-    );
-    const refreshToken = randomBytes(48).toString('hex');
-
-    await this.userModel.findByIdAndUpdate(userId, {
-      refresh_token: this.hashToken(refreshToken),
-      refresh_token_expires_at: new Date(
-        Date.now() + parseDurationToMs(refreshExpiresIn),
-      ),
-    });
-
-    const accessExpiresIn = this.accessExpiresIn();
-    return {
-      refreshToken,
-      expiresIn: accessExpiresIn,
-      expiresInSeconds: Math.floor(parseDurationToMs(accessExpiresIn) / 1000),
-      refreshExpiresIn,
-      refreshExpiresInSeconds: Math.floor(
-        parseDurationToMs(refreshExpiresIn) / 1000,
-      ),
-    };
-  }
-
-  private accessExpiresIn() {
-    return resolveAdminAccessExpiresIn(
-      this.configService.get<string>('ADMIN_JWT_EXPIRES_IN'),
-    );
-  }
-
-  private hashToken(token: string) {
-    return createHash('sha256').update(token).digest('hex');
-  }
-
-  private toSafeAdmin(admin: UserDocument) {
+  toSafeAdmin(admin: UserDocument) {
     const plain = admin.toObject() as unknown as Record<string, unknown>;
-    delete plain.password;
-    delete plain.refresh_token;
-    delete plain.refresh_token_expires_at;
+    for (const field of SENSITIVE_ADMIN_FIELDS) delete plain[field];
     return plain;
+  }
+
+  private async findAdminOrFail(id: string) {
+    const admin = await this.userModel.findOne({ _id: id, isDeleted: false });
+    if (!admin) {
+      throw new NotFoundException('Admin not found');
+    }
+    return admin;
+  }
+
+  private async assertEmailFree(email: string, exceptId: string) {
+    if (await this.userModel.exists({ email, _id: { $ne: exceptId } })) {
+      throw new ConflictException('Email already in use by another user');
+    }
   }
 
   private async createAudit(
@@ -600,14 +461,5 @@ export class AdminService {
       },
       this.toSafeAdmin(admin),
     );
-  }
-
-  private generateToken(user: IUserJwt): string {
-    return this.jwtService.sign(user);
-  }
-
-  protected async hashPassword(password: string) {
-    const salt = await bcrypt.genSalt();
-    return await bcrypt.hash(password, salt);
   }
 }

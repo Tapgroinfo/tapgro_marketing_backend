@@ -16,9 +16,11 @@ async function bootstrap() {
       await seeder.seedRoleAndAdmin();
     } else if (target === 'platform') {
       await seeder.seedPlatforms();
+    } else if (target === 'template') {
+      await seeder.seedTemplates();
     } else {
       console.error(
-        `❌ Unknown target: "${target}". Use: all | admin | platform`,
+        `❌ Unknown target: "${target}". Use: all | admin | platform | template`,
       );
       process.exitCode = 1;
       return;

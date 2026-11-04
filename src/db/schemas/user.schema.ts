@@ -49,6 +49,29 @@ export class User {
   @Prop({ type: Date, default: null })
   refresh_token_expires_at: Date | null;
 
+  /** Embedded in JWTs; incrementing it revokes every issued access token. */
+  @Prop({ type: Number, default: 0 })
+  tokenVersion: number;
+
+  @Prop({ type: Number, default: 0 })
+  failedLoginAttempts: number;
+
+  @Prop({ type: Date, default: null })
+  lockedUntil: Date | null;
+
+  /** SHA-256 of the forgot-password OTP. */
+  @Prop({ type: String, default: null })
+  resetOtpHash: string | null;
+
+  @Prop({ type: Date, default: null })
+  resetOtpExpiresAt: Date | null;
+
+  @Prop({ type: Date, default: null })
+  resetOtpSentAt: Date | null;
+
+  @Prop({ type: Number, default: 0 })
+  resetOtpAttempts: number;
+
   @Prop({ type: Boolean, default: true })
   status: boolean;
 

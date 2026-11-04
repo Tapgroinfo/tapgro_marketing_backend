@@ -1,5 +1,5 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsString, IsEmail } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsNotEmpty, IsString, IsEmail, IsOptional } from 'class-validator';
 
 export class UpdateAdminProfileDto {
   @ApiProperty({
@@ -25,4 +25,12 @@ export class UpdateAdminProfileDto {
   @IsNotEmpty({ message: 'Email is required' })
   @IsEmail({}, { message: 'Invalid email format' })
   email: string;
+
+  @ApiPropertyOptional({
+    type: String,
+    description: 'Profile image URL from POST /upload',
+  })
+  @IsOptional()
+  @IsString()
+  image?: string;
 }

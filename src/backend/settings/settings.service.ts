@@ -1,7 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { SystemSettingsDocument } from '../../db/schemas/setting.schema';
+import {
+  EmailSmtpSettings,
+  SmsGatewaySettings,
+  SocialProviderSettings,
+  SystemConfigSettings,
+  SystemSettingsDocument,
+  WhatsappGatewaySettings,
+} from '../../db/schemas/setting.schema';
 import { GlobalService } from '../globalService/global.service';
 import { auditAction } from '../../utils/auditActionEnum';
 import { auditActionDes } from '../../utils/auditActionDesEnum';
@@ -10,6 +17,26 @@ import { UpdateSettingsDto } from './dto/update-settings.dto';
 
 const SETTINGS_KEY = 'default';
 const MASK = '********';
+
+type Section = keyof UpdateSettingsDto;
+
+/** Fields returned as ******** and kept unchanged when sent blank / masked. */
+const SECRET_FIELDS: Partial<Record<Section, string[]>> = {
+  email: ['password'],
+  socialProvider: ['apiKey', 'webhookSecret'],
+  sms: ['password'],
+  whatsapp: ['apiKey'],
+};
+
+const SECTIONS: Section[] = [
+  'company',
+  'email',
+  'legal',
+  'socialProvider',
+  'sms',
+  'whatsapp',
+  'system',
+];
 
 @Injectable()
 export class SettingsService {
@@ -39,31 +66,25 @@ export class SettingsService {
 
   async update(dto: UpdateSettingsDto, user_id: string) {
     const doc = await this.getOrCreate();
-    const plain = doc.toObject();
+    const plain = doc.toObject() as unknown as Record<
+      string,
+      Record<string, unknown> | undefined
+    >;
 
-    if (dto.company) {
-      doc.set('company', { ...plain.company, ...dto.company });
-    }
-    if (dto.email) {
-      const next = { ...plain.email, ...dto.email };
-      if (this.isMaskedSecret(dto.email.password)) {
-        next.password = plain.email?.password || '';
+    const updatedSections: string[] = [];
+    for (const section of SECTIONS) {
+      const incoming = dto[section] as Record<string, unknown> | undefined;
+      if (!incoming) continue;
+
+      const current = plain[section] || {};
+      const next = { ...current, ...incoming };
+      for (const field of SECRET_FIELDS[section] || []) {
+        if (this.isMaskedSecret(incoming[field] as string | undefined)) {
+          next[field] = current[field] || '';
+        }
       }
-      doc.set('email', next);
-    }
-    if (dto.legal) {
-      doc.set('legal', { ...plain.legal, ...dto.legal });
-    }
-    if (dto.socialProvider) {
-      const current = plain.socialProvider || {};
-      const next = { ...current, ...dto.socialProvider };
-      if (this.isMaskedSecret(dto.socialProvider.apiKey)) {
-        next.apiKey = current.apiKey || '';
-      }
-      if (this.isMaskedSecret(dto.socialProvider.webhookSecret)) {
-        next.webhookSecret = current.webhookSecret || '';
-      }
-      doc.set('socialProvider', next);
+      doc.set(section, next);
+      updatedSections.push(section);
     }
 
     await doc.save();
@@ -75,7 +96,7 @@ export class SettingsService {
         description: auditActionDes.SETTINGS_UPDATED,
         auditType: auditType.SETTINGS_LOG,
       },
-      { sections: Object.keys(dto) },
+      { sections: updatedSections },
     );
 
     return {
@@ -85,15 +106,29 @@ export class SettingsService {
     };
   }
 
-  /** No-auth subset safe for login pages / public sites. */
+  /** No-auth subset safe for login pages / public sites / apps. */
   async getPublicSettings() {
     const doc = await this.getOrCreate();
+    const system = doc.system || ({} as SystemConfigSettings);
     return {
       success: true,
       data: {
         company: {
           name: doc.company?.name || 'TapGro',
           websiteUrl: doc.company?.websiteUrl || '',
+        },
+        system: {
+          maintenanceMode: system.maintenanceMode ?? false,
+          maintenanceMessage: system.maintenanceMessage || '',
+          timezone: system.timezone,
+          currency: system.currency,
+          currencySymbol: system.currencySymbol,
+          dateFormat: system.dateFormat,
+          androidVersion: system.androidVersion,
+          iosVersion: system.iosVersion,
+          forceUpdate: system.forceUpdate ?? false,
+          playStoreUrl: system.playStoreUrl || '',
+          appStoreUrl: system.appStoreUrl || '',
         },
         legal: {
           privacyPolicyUpdatedAt: doc.legal?.privacyPolicyUpdatedAt || '',
@@ -137,6 +172,27 @@ export class SettingsService {
     };
   }
 
+  /** Internal (unmasked) — for senders and integrations only. */
+  async getEmailSmtpConfig(): Promise<Partial<EmailSmtpSettings>> {
+    return (await this.getOrCreate()).toObject().email || {};
+  }
+
+  async getSmsConfig(): Promise<Partial<SmsGatewaySettings>> {
+    return (await this.getOrCreate()).toObject().sms || {};
+  }
+
+  async getWhatsappConfig(): Promise<Partial<WhatsappGatewaySettings>> {
+    return (await this.getOrCreate()).toObject().whatsapp || {};
+  }
+
+  async getSocialProviderConfig(): Promise<Partial<SocialProviderSettings>> {
+    return (await this.getOrCreate()).toObject().socialProvider || {};
+  }
+
+  async getCompanyName(): Promise<string> {
+    return (await this.getOrCreate()).company?.name || 'TapGro';
+  }
+
   private privacyPolicyPayload(doc: SystemSettingsDocument) {
     return {
       title: 'Privacy Policy',
@@ -154,20 +210,19 @@ export class SettingsService {
   }
 
   private buildSettingsData(doc: SystemSettingsDocument) {
-    const plain = doc.toObject();
-    return {
-      company: plain.company,
-      email: {
-        ...plain.email,
-        password: this.maskSecret(plain.email?.password),
-      },
-      legal: plain.legal,
-      socialProvider: {
-        ...plain.socialProvider,
-        apiKey: this.maskSecret(plain.socialProvider?.apiKey),
-        webhookSecret: this.maskSecret(plain.socialProvider?.webhookSecret),
-      },
-    };
+    const plain = doc.toObject() as unknown as Record<
+      string,
+      Record<string, unknown> | undefined
+    >;
+    const data: Record<string, unknown> = {};
+    for (const section of SECTIONS) {
+      const value = { ...(plain[section] || {}) };
+      for (const field of SECRET_FIELDS[section] || []) {
+        value[field] = this.maskSecret(value[field] as string | undefined);
+      }
+      data[section] = value;
+    }
+    return data;
   }
 
   private isMaskedSecret(value?: string): boolean {

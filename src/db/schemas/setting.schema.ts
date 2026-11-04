@@ -102,6 +102,94 @@ export class SocialProviderSettings {
   apiBaseUrl: string;
 }
 
+/** SMS gateway (SmartPing-style HTTP GET with DLT ids). */
+@Schema({ _id: false })
+export class SmsGatewaySettings {
+  @Prop({ type: Boolean, default: false })
+  enabled: boolean;
+
+  @Prop({ type: String, default: '' })
+  username: string;
+
+  @Prop({ type: String, default: '' })
+  password: string;
+
+  @Prop({ type: String, default: '' })
+  senderId: string;
+
+  @Prop({ type: String, default: '' })
+  endpoint: string;
+
+  @Prop({ type: String, default: '' })
+  dltPrincipalEntityId: string;
+
+  @Prop({ type: String, default: '' })
+  dltTelemarketerId: string;
+}
+
+/** WhatsApp Business template API (Mehery-style). */
+@Schema({ _id: false })
+export class WhatsappGatewaySettings {
+  @Prop({ type: Boolean, default: false })
+  enabled: boolean;
+
+  @Prop({ type: String, default: '' })
+  apiKey: string;
+
+  @Prop({ type: String, default: '' })
+  apiId: string;
+
+  @Prop({ type: String, default: '' })
+  channelId: string;
+
+  @Prop({ type: String, default: '' })
+  endpoint: string;
+}
+
+/** General app behaviour shown to clients via public settings. */
+@Schema({ _id: false })
+export class SystemConfigSettings {
+  @Prop({ type: Boolean, default: false })
+  maintenanceMode: boolean;
+
+  @Prop({ type: String, default: '' })
+  maintenanceMessage: string;
+
+  @Prop({ type: String, default: 'Asia/Kolkata' })
+  timezone: string;
+
+  @Prop({ type: String, default: 'INR' })
+  currency: string;
+
+  @Prop({ type: String, default: '₹' })
+  currencySymbol: string;
+
+  @Prop({ type: String, default: 'DD/MM/YYYY' })
+  dateFormat: string;
+
+  @Prop({ type: String, default: '1.0.0' })
+  androidVersion: string;
+
+  @Prop({ type: String, default: '1.0.0' })
+  iosVersion: string;
+
+  @Prop({ type: Boolean, default: false })
+  forceUpdate: boolean;
+
+  @Prop({ type: String, default: '' })
+  playStoreUrl: string;
+
+  @Prop({ type: String, default: '' })
+  appStoreUrl: string;
+}
+
+export const SmsGatewaySettingsSchema =
+  SchemaFactory.createForClass(SmsGatewaySettings);
+export const WhatsappGatewaySettingsSchema = SchemaFactory.createForClass(
+  WhatsappGatewaySettings,
+);
+export const SystemConfigSettingsSchema =
+  SchemaFactory.createForClass(SystemConfigSettings);
 export const CompanySettingsSchema =
   SchemaFactory.createForClass(CompanySettings);
 export const EmailSmtpSettingsSchema =
@@ -128,6 +216,15 @@ export class SystemSettings {
 
   @Prop({ type: SocialProviderSettingsSchema, default: () => ({}) })
   socialProvider: SocialProviderSettings;
+
+  @Prop({ type: SmsGatewaySettingsSchema, default: () => ({}) })
+  sms: SmsGatewaySettings;
+
+  @Prop({ type: WhatsappGatewaySettingsSchema, default: () => ({}) })
+  whatsapp: WhatsappGatewaySettings;
+
+  @Prop({ type: SystemConfigSettingsSchema, default: () => ({}) })
+  system: SystemConfigSettings;
 }
 
 export const SystemSettingsSchema =

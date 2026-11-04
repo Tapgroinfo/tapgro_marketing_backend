@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { LoggerModule } from 'nestjs-pino';
 import { schemas } from './db/schema';
 import { BackendModules } from './backend/module';
@@ -8,6 +10,7 @@ import { GlobalServiceModule } from './backend/globalService/globalService.modul
 import { AppController } from './app.controller';
 import { DbSeederService } from './db/seeders/seeder.service';
 import { buildPinoLoggerParams } from './utils/pino-logger.config';
+import { DEFAULT_THROTTLE } from './utils/throttle.constants';
 
 @Module({
   imports: [
@@ -16,6 +19,7 @@ import { buildPinoLoggerParams } from './utils/pino-logger.config';
       envFilePath: '.env',
     }),
     LoggerModule.forRoot(buildPinoLoggerParams()),
+    ThrottlerModule.forRoot([DEFAULT_THROTTLE]),
     MongooseModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
@@ -31,6 +35,9 @@ import { buildPinoLoggerParams } from './utils/pino-logger.config';
     ...BackendModules,
   ],
   controllers: [AppController],
-  providers: [DbSeederService],
+  providers: [
+    DbSeederService,
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
+  ],
 })
 export class AppModule {}
