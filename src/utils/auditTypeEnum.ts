@@ -8,4 +8,6 @@ export enum auditType {
   CMS_LOG = 'CMS_LOG',
   PLAN_LOG = 'PLAN_LOG',
   SUPPORT_LOG = 'SUPPORT_LOG',
+  SOCIAL_LOG = 'SOCIAL_LOG',
+  CUSTOMER_LOG = 'CUSTOMER_LOG',
 }

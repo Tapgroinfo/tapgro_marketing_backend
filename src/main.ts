@@ -14,6 +14,7 @@ import compression from 'compression';
 import { join } from 'path';
 import { AppModule } from './app.module';
 import { BackendModules } from './backend/module';
+import { CustomerModules } from './customer/module';
 import { LOCAL_UPLOAD_DIR } from './backend/upload/upload.service';
 
 async function bootstrap() {
@@ -59,8 +60,13 @@ async function bootstrap() {
     prefix: `/${LOCAL_UPLOAD_DIR}/`,
   });
 
+  // Includes the raw spec routes (-json / -yaml), which Swagger serves separately
   app.use(
-    ['/swagger/backend'],
+    ['backend', 'customer'].flatMap((doc) => [
+      `/swagger/${doc}`,
+      `/swagger/${doc}-json`,
+      `/swagger/${doc}-yaml`,
+    ]),
     basicAuth({
       challenge: true,
       users: { [swaggerUser]: swaggerPassword },
@@ -98,6 +104,33 @@ async function bootstrap() {
     swaggerOptions,
   );
 
+  const customerSwaggerConfig = new DocumentBuilder()
+    .setTitle('TapGro Marketing — Customer App API')
+    .setDescription(
+      [
+        'APIs for the customer app (salon / business owners) under `/api/customer/v1`.',
+        '',
+        '**Login:** `POST /auth/send-otp` → `POST /auth/verify-otp` → Authorize with `customerBearerAuth` using `token`.',
+        '',
+        '**Then:** `GET /me` · `GET /platforms` (active platforms + my connections) · `POST /channels/connect` · `GET /leads`.',
+      ].join('\n'),
+    )
+    .setVersion('1.0')
+    .addBearerAuth(
+      { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
+      'customerBearerAuth',
+    )
+    .build();
+
+  SwaggerModule.setup(
+    'swagger/customer',
+    app,
+    SwaggerModule.createDocument(app, customerSwaggerConfig, {
+      include: CustomerModules,
+    }),
+    swaggerOptions,
+  );
+
   // Allow the panel / websites on other origins to load /uploads images
   app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
   app.use(compression());
@@ -107,6 +140,9 @@ async function bootstrap() {
   console.log(`🚀 App running on port ${port}`);
   console.log(
     `📘 Backend Swagger URL: http://localhost:${port}/swagger/backend`,
+  );
+  console.log(
+    `📗 Customer Swagger URL: http://localhost:${port}/swagger/customer`,
   );
 }
 

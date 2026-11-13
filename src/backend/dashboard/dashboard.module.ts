@@ -17,6 +17,12 @@ import {
   LoginHistorySchema,
 } from '../../db/schemas/loginHistory.schema';
 import { AuditTrailSchema } from '../../db/schemas/auditTrail.schema';
+import {
+  SocialChannel,
+  SocialChannelSchema,
+} from '../../db/schemas/social.schema';
+import { Customer, CustomerSchema } from '../../db/schemas/customer.schema';
+import { Lead, LeadSchema } from '../../db/schemas/lead.schema';
 import { DashboardController } from './dashboard.controller';
 import { DashboardService } from './dashboard.service';
 
@@ -31,6 +37,9 @@ import { DashboardService } from './dashboard.service';
       { name: IntegrationLog.name, schema: IntegrationLogSchema },
       { name: LoginHistory.name, schema: LoginHistorySchema },
       { name: 'AuditTrail', schema: AuditTrailSchema },
+      { name: SocialChannel.name, schema: SocialChannelSchema },
+      { name: Customer.name, schema: CustomerSchema },
+      { name: Lead.name, schema: LeadSchema },
     ]),
   ],
   controllers: [DashboardController],

@@ -43,6 +43,16 @@ export class IntegrationLogService {
     }
   }
 
+  /** True when this provider event id was already received (webhook retries). */
+  async hasWebhookEvent(provider: string, eventId: string) {
+    return !!(await this.logModel.exists({
+      type: 'webhook',
+      provider,
+      target: eventId,
+      status: { $in: ['received', 'success'] },
+    }));
+  }
+
   async findAll(filter: IntegrationLogFilter) {
     return this.globalService.paginate<IntegrationLog>({
       model: this.logModel,

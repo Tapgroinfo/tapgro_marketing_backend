@@ -33,4 +33,35 @@ export class UpdateSocialProviderSettingsDto {
   @IsOptional()
   @IsString()
   apiBaseUrl?: string;
+
+  @ApiPropertyOptional({
+    example: 'https://admin.tapgro.com/social/channels',
+    description:
+      'Admin panel page the browser returns to after connecting a channel. Gets ?social_connect=success|error&platform=&channelId=&message=',
+  })
+  @IsOptional()
+  @IsString()
+  panelRedirectUrl?: string;
+
+  @ApiPropertyOptional({
+    example: 'https://app.tapgro.com/social',
+    description:
+      'Customer app page or deep link to return to after a customer connects a channel. Same query params as panelRedirectUrl.',
+  })
+  @IsOptional()
+  @IsString()
+  customerRedirectUrl?: string;
+
+  @ApiPropertyOptional({
+    example: 'TapGro',
+    description: 'Brand on the Zernio connect welcome screen',
+  })
+  @IsOptional()
+  @IsString()
+  brandName?: string;
+
+  @ApiPropertyOptional({ description: 'Logo URL for the welcome screen' })
+  @IsOptional()
+  @IsString()
+  logoUrl?: string;
 }

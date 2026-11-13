@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>TapGro Social Media (Zernio) — Plan of Action</title>
+<style>
+  @page { size: A4; margin: 15mm 14mm; }
+  * { box-sizing: border-box; }
+  body { font-family: "Segoe UI", Arial, sans-serif; color: #1f2937; font-size: 10.3pt; line-height: 1.45; margin: 0; }
+  h1 { font-size: 21pt; margin: 0 0 4px; color: #0f172a; }
+  h2 { font-size: 13.5pt; margin: 20px 0 8px; color: #0f172a; border-bottom: 2px solid #7c3aed; padding-bottom: 4px; }
+  h3 { font-size: 11pt; margin: 12px 0 5px; }
+  p { margin: 5px 0; }
+  .sub { color: #6b7280; font-size: 9.8pt; margin-bottom: 12px; }
+  table { width: 100%; border-collapse: collapse; margin: 7px 0 10px; font-size: 9.4pt; page-break-inside: avoid; }
+  th, td { border: 1px solid #e5e7eb; padding: 6px 7px; text-align: left; vertical-align: top; }
+  th { background: #f3f0ff; color: #3b0764; font-weight: 600; }
+  .box { border: 1px solid #ddd6fe; background: #faf5ff; border-radius: 6px; padding: 9px 12px; margin: 9px 0; page-break-inside: avoid; }
+  .warn { border-color: #fde68a; background: #fffbeb; }
+  ul { margin: 4px 0 6px 18px; padding: 0; } li { margin: 2px 0; }
+  .done { color: #15803d; font-weight: 600; } .todo { color: #b45309; font-weight: 600; }
+  .phase { border-left: 4px solid #7c3aed; padding: 6px 10px; margin: 10px 0; background: #fcfcff; page-break-inside: avoid; }
+  .phase h3 { margin-top: 0; }
+  .meta { font-size: 9pt; color: #6b7280; }
+  .pb { page-break-before: always; }
+  code { font-family: Consolas, monospace; font-size: 9pt; background: #f3f4f6; padding: 0 3px; border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<h1>Social Media for Salons — Plan of Action</h1>
+<div class="sub">TapGro Marketing · Integration with Zernio (one API for Facebook, Instagram, Google Business Profile, YouTube and Meta Ads) · 6 Nov 2026</div>
+
+<div class="box">
+  <b>Summary</b>
+  <ul>
+    <li>We use <b>Zernio</b> instead of building directly on Meta / Google / YouTube APIs: launch in weeks, not 4–6 months, and our suspended Meta developer account does not block us.</li>
+    <li><b>Backend foundation is already built and tested</b>: admin panel, customer app login (mobile OTP), connecting channels through Zernio, channel testing, lead capture from Meta lead forms, webhooks.</li>
+    <li>Remaining work: <b>Zernio account setup (1–2 days)</b>, <b>app / panel screens</b>, then <b>posting, analytics and inbox</b> features, a <b>pilot with 5–10 salons</b> and <b>billing</b>.</li>
+    <li>Target: <b>pilot in ~4 weeks</b>, <b>paid launch in ~8 weeks</b>.</li>
+  </ul>
+</div>
+
+<h2>1. How it works</h2>
+<table>
+  <tr><th>Step</th><th>What happens</th></tr>
+  <tr><td>1. Salon logs in</td><td>Customer app: mobile number → OTP → account created. Existing TapGro Hub customers are flagged automatically.</td></tr>
+  <tr><td>2. Connect channels</td><td>Salon taps “Connect Instagram / Facebook / Google”. We get a secure link from Zernio; the owner logs in on Facebook / Google and picks the Page or location. Zernio sends them back to our app.</td></tr>
+  <tr><td>3. Use features</td><td>Our backend calls Zernio to post, schedule, read analytics, reply to comments / reviews and manage Meta ads for that salon.</td></tr>
+  <tr><td>4. Stay in sync</td><td>Zernio webhooks tell us when a channel disconnects (token expired), a post is published / failed, or a lead form is submitted → lead appears in the salon’s Leads screen.</td></tr>
+</table>
+<p class="meta">Each salon = one Zernio “profile”. Each connected account (Facebook Page, Instagram, GBP location, YouTube channel, Meta ad account) is billed by Zernio per month.</p>
+
+<h2>2. Current status</h2>
+<table>
+  <tr><th>Area</th><th>Status</th><th>Details</th></tr>
+  <tr><td>Admin panel backend</td><td class="done">Done</td><td>Admins, roles &amp; permissions, platforms, plans, CMS, support tickets, templates, notifications, export, dashboard, audit &amp; integration logs</td></tr>
+  <tr><td>Zernio connection</td><td class="done">Done</td><td>API client, settings (API key, webhook secret, redirect URLs), provider test</td></tr>
+  <tr><td>Channel connect / test / disconnect</td><td class="done">Done</td><td>Admin and customer app; health check and real test post</td></tr>
+  <tr><td>Webhooks</td><td class="done">Done</td><td>Signed (<code>X-Zernio-Signature</code>), duplicate-safe; account connected / disconnected; <code>lead.received</code></td></tr>
+  <tr><td>Customer app backend</td><td class="done">Done</td><td>OTP login, profile, active platforms, channels, leads (Meta + manual), separate Swagger <code>/swagger/customer</code></td></tr>
+  <tr><td>Zernio account &amp; production setup</td><td class="todo">To do</td><td>Account, API key, card, webhook, production URL, ads enabled</td></tr>
+  <tr><td>OTP delivery</td><td class="todo">To do</td><td>SMS gateway + DLT template approval (or WhatsApp template)</td></tr>
+  <tr><td>App &amp; panel screens</td><td class="todo">To do</td><td>Frontend / mobile team</td></tr>
+  <tr><td>Posting, analytics, inbox, ads</td><td class="todo">To do</td><td>Backend phase 3 below</td></tr>
+  <tr><td>Subscription billing</td><td class="todo">To do</td><td>Plans exist; payment collection not built</td></tr>
+</table>
+
+<h2 class="pb">3. Plan of action</h2>
+
+<div class="phase">
+  <h3>Phase 0 — Setup (Day 1–2) · Owner: Tech lead + Manager</h3>
+  <ul>
+    <li>Create Zernio account (zernio.com), add company card, generate API key. First 2 connected accounts are free.</li>
+    <li>Ask Zernio to <b>enable Ads</b> on our team (needed for Meta lead forms — must be on <i>before</i> salons connect Facebook).</li>
+    <li>Production server with HTTPS domain (e.g. <code>api.tapgro.com</code>); set <code>APP_BASE_URL</code>.</li>
+    <li>In Zernio dashboard add webhook <code>/api/public/v1/webhooks/zernio</code> with a secret; events: account.connected, account.disconnected, lead.received, post.published, post.failed.</li>
+    <li>Save API key, webhook secret, panel &amp; app redirect URLs in TapGro settings → run <b>“Test provider”</b>.</li>
+    <li>Start SMS DLT template approval for login OTP (can take several days).</li>
+  </ul>
+  <p class="meta">Done when: provider test passes and a test webhook reaches our integration logs.</p>
+</div>
+
+<div class="phase">
+  <h3>Phase 1 — Internal pilot (Week 1) · Owner: Backend + Marketing</h3>
+  <ul>
+    <li>Connect TapGro’s own Facebook Page and Instagram from the admin panel (uses the 2 free accounts).</li>
+    <li>Run channel health test and one real test post on each.</li>
+    <li>Create a test Meta lead form; confirm the lead arrives in Leads.</li>
+    <li>Disconnect / reconnect once to confirm “needs reconnect” alerts work.</li>
+  </ul>
+  <p class="meta">Done when: all four checks pass on real accounts.</p>
+</div>
+
+<div class="phase">
+  <h3>Phase 2 — App &amp; panel screens (Week 1–3) · Owner: Frontend / Mobile</h3>
+  <ul>
+    <li><b>Customer app:</b> OTP login, profile, “Platforms” screen with Connect buttons (open link in in-app browser, return via deep link <code>tapgro://social</code>), channels list, Leads list / detail / notes.</li>
+    <li><b>Admin panel:</b> Zernio settings page, social profiles &amp; channels, customers (TapGro flag, block), TapGro member import, leads.</li>
+    <li>All APIs are ready and documented in Swagger (<code>/swagger/customer</code>, <code>/swagger/backend</code>).</li>
+  </ul>
+</div>
+
+<div class="phase">
+  <h3>Phase 3 — Core social features (Week 3–6) · Owner: Backend</h3>
+  <table>
+    <tr><th>Feature</th><th>Zernio API</th><th>Estimate</th></tr>
+    <tr><td>Create / schedule posts (image, video, Reels) to several channels at once; media upload</td><td><code>POST /v1/posts</code>, <code>POST /v1/media/presign</code>, webhooks <code>post.published / post.failed</code></td><td>1 week</td></tr>
+    <tr><td>Post calendar, status, retry failed posts</td><td><code>GET /v1/posts</code>, <code>POST /v1/posts/{id}/retry</code></td><td>3 days</td></tr>
+    <tr><td>Analytics dashboard (reach, likes, followers, best time to post)</td><td><code>GET /v1/analytics/dashboard</code>, <code>/daily-metrics</code>, <code>/best-time</code> (daily sync job)</td><td>1 week</td></tr>
+    <tr><td>Comments, DMs and Google review replies</td><td>Zernio inbox / reviews API, <code>comment.received</code>, <code>message.received</code></td><td>1 week</td></tr>
+    <tr><td>Meta ads: boost post, campaign, results</td><td><code>/v1/ads</code> (Meta Ads connect already done)</td><td>1 week</td></tr>
+  </table>
+  <p class="meta">Order: posts → analytics → inbox / reviews → ads. Each is released to the pilot as it is ready.</p>
+</div>
+
+<div class="phase">
+  <h3>Phase 4 — Salon pilot (Week 6–7) · Owner: Product + Support</h3>
+  <ul>
+    <li>Onboard 5–10 friendly salons (preferably TapGro Hub customers). Help them connect FB, Instagram, Google.</li>
+    <li>Watch integration logs daily: failed posts, disconnects, lead delivery. Collect feedback.</li>
+    <li>Cost during pilot: ~30–50 accounts → about <b>₹9,500 – ₹15,000 / month</b> to Zernio.</li>
+  </ul>
+</div>
+
+<div class="phase">
+  <h3>Phase 5 — Paid launch (Week 8) · Owner: Product + Backend</h3>
+  <ul>
+    <li>Plans: Starter ₹999, Growth ₹1,999, Pro ₹2,999 / month (+GST) — from the pricing review.</li>
+    <li>Build payment + subscription (Razorpay), plan limits (number of channels), trial.</li>
+    <li>Turn off OTP test mode, final security review, launch.</li>
+  </ul>
+</div>
+
+<h2 class="pb">4. Timeline</h2>
+<table>
+  <tr><th>Week</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th><th>7</th><th>8</th></tr>
+  <tr><td>Setup + internal pilot</td><td>■</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+  <tr><td>App &amp; panel screens</td><td>■</td><td>■</td><td>■</td><td></td><td></td><td></td><td></td><td></td></tr>
+  <tr><td>Posts &amp; scheduling</td><td></td><td></td><td>■</td><td>■</td><td></td><td></td><td></td><td></td></tr>
+  <tr><td>Analytics</td><td></td><td></td><td></td><td>■</td><td>■</td><td></td><td></td><td></td></tr>
+  <tr><td>Inbox, reviews, ads</td><td></td><td></td><td></td><td></td><td>■</td><td>■</td><td></td><td></td></tr>
+  <tr><td>Salon pilot</td><td></td><td></td><td></td><td></td><td></td><td>■</td><td>■</td><td></td></tr>
+  <tr><td>Billing + launch</td><td></td><td></td><td></td><td></td><td></td><td></td><td>■</td><td>■</td></tr>
+</table>
+
+<h2>5. What we need from management</h2>
+<table>
+  <tr><th>Need</th><th>Why</th><th>When</th></tr>
+  <tr><td>Approve Zernio account + company card (USD billing)</td><td>Required for more than 2 accounts</td><td>Day 1</td></tr>
+  <tr><td>Production server + domain with HTTPS</td><td>OAuth return URL and webhooks must be public HTTPS</td><td>Day 1–2</td></tr>
+  <tr><td>SMS gateway account + DLT template approval</td><td>Login OTP for salons</td><td>Start now (approval takes days)</td></tr>
+  <tr><td>Frontend / mobile developer time</td><td>App and panel screens</td><td>Week 1–3</td></tr>
+  <tr><td>5–10 pilot salons</td><td>Real-world testing</td><td>Week 6</td></tr>
+  <tr><td>Final plan prices</td><td>Billing build</td><td>Week 6</td></tr>
+</table>
+
+<h2>6. Monthly cost (Zernio)</h2>
+<table>
+  <tr><th>Salons (5 accounts each)</th><th>≈ Zernio cost / month</th><th>≈ Per salon</th></tr>
+  <tr><td>Pilot (10)</td><td>₹14,800</td><td>₹1,478</td></tr>
+  <tr><td>100</td><td>₹63,200</td><td>₹632</td></tr>
+  <tr><td>500</td><td>₹2,40,000</td><td>₹480</td></tr>
+</table>
+<p class="meta">$6 / $3 / $1 per account per month (tiered), first 2 free, ads $0.01 per active ad after 500 free. ₹88 = $1. Details in the separate pricing review.</p>
+
+<h2>7. Risks and how we handle them</h2>
+<table>
+  <tr><th>Risk</th><th>Mitigation</th></tr>
+  <tr><td>Dependence on one vendor (Zernio down / price change)</td><td>All Zernio calls are in one module; can switch provider or move Meta / Google direct later (at ~1,000+ salons). Integration logs show every call.</td></tr>
+  <tr><td>Facebook / Instagram tokens expire</td><td>Zernio sends “disconnected” → channel marked “needs reconnect”, admin notified, salon shown a Reconnect button.</td></tr>
+  <tr><td>Meta leads not arriving</td><td>Ads enabled on Zernio before salons connect; test lead form in Phase 1.</td></tr>
+  <tr><td>OTP SMS delays (DLT)</td><td>Start approval now; WhatsApp OTP template as fallback.</td></tr>
+  <tr><td>Salon data privacy</td><td>Tokens stay with Zernio (SOC 2 / GDPR docs); we store only account ids; secrets masked; signed webhooks.</td></tr>
+  <tr><td>Accidental public posts while testing</td><td>Test post requires explicit confirmation; health check is the default test.</td></tr>
+</table>
+
+<h2>8. Success measures (first 3 months)</h2>
+<ul>
+  <li>Salons onboarded and % with at least one connected channel</li>
+  <li>Posts published per salon per week; failed-post rate below 2%</li>
+  <li>Leads captured per salon per month</li>
+  <li>Paid conversion from pilot / trial; monthly churn</li>
+  <li>Zernio cost per salon vs plan price (target gross margin above 60%)</li>
+</ul>
+
+</body>
+</html>

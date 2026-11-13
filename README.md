@@ -5,7 +5,16 @@ NestJS + MongoDB API for the TapGro salon social media feature.
 | Area | Base path | Swagger |
 |------|-----------|---------|
 | Admin panel | `/api/backend/v1` | `/swagger/backend` |
-| Public (website / apps) | `/api/public/v1` | same |
+| Customer app (business owners) | `/api/customer/v1` | `/swagger/customer` |
+| Public (website / apps) | `/api/public/v1` | `/swagger/backend` |
+
+## Customer app
+
+- **Login:** `POST /auth/send-otp { mobile }` → `POST /auth/verify-otp { mobile, otp, name?, businessName? }` → Bearer `token` (+ `refreshToken`). First login creates the account.
+- **OTP delivery:** SMS template `customer_login_otp` (needs SMS gateway + DLT id in Templates), WhatsApp template as fallback. `CUSTOMER_OTP_TEST_MODE=true` returns `devOtp` (never in production).
+- **TapGro users:** admins import known TapGro Hub mobiles (`POST /api/backend/v1/tapgro-members/import`); matching customers get `isTapgroUser=true` on login. Admins can also set it per customer.
+- **Channels:** `GET /platforms` lists only admin-enabled platforms with my connections; `POST /channels/connect` returns the Zernio `authUrl`; the browser returns to `socialProvider.customerRedirectUrl`.
+- **Leads:** Meta Lead Gen leads arrive via the Zernio `lead.received` webhook on the customer's Facebook Page; plus manual leads, status, notes and follow-up.
 
 ## Quick start
 
@@ -38,6 +47,19 @@ Then set SMTP under `PUT /settings` (`email` section) so password reset, welcome
 | Settings | Company, SMTP, SMS, WhatsApp, Zernio/Ayrshare, maintenance mode, app versions, legal pages |
 | Integration logs | Every email / SMS / WhatsApp send and inbound webhook (kept 90 days) |
 | Audit trail | Who changed what |
+
+## Social channels (Zernio)
+
+1. Create an API key at zernio.com → `PUT /settings` with
+   `socialProvider: { enabled: true, provider: "zernio", apiKey, webhookSecret, panelRedirectUrl, brandName }`.
+2. Set `APP_BASE_URL` in `.env` to the public URL of this API.
+3. `POST /social/provider/test` — checks the key and returns the `callbackUrl` and `webhookUrl`.
+4. In the Zernio dashboard add a webhook to `webhookUrl` with the same secret, events `account.connected` + `account.disconnected`.
+5. `POST /social/profile` (one per brand / salon) → `POST /social/profile/:id/connect { platform }` → open `authUrl`.
+   The browser comes back to `panelRedirectUrl?social_connect=success|error&channelId=…`; or poll `GET /social/connect/:session`.
+6. `POST /social/channel/:id/test` — `mode: "health"` (safe) or `mode: "post"` (real post, needs `confirmPublish: true`).
+
+Only platforms marked active under Platforms can be connected (Facebook, Instagram, Google Business, Meta Ads by default).
 
 ## Public APIs (`/api/public/v1`)
 

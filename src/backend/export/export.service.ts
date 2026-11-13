@@ -14,6 +14,8 @@ import { SupportTicket } from '../../db/schemas/supportTicket.schema';
 import { IntegrationLog } from '../../db/schemas/integrationLog.schema';
 import { LoginHistory } from '../../db/schemas/loginHistory.schema';
 import { AuditTrail } from '../../db/schemas/auditTrail.schema';
+import { Customer } from '../../db/schemas/customer.schema';
+import { Lead } from '../../db/schemas/lead.schema';
 import { hasPermissions } from '../../utils/permission-check.util';
 
 export const EXPORT_ENTITIES = [
@@ -24,6 +26,8 @@ export const EXPORT_ENTITIES = [
   'integration-logs',
   'plans',
   'platforms',
+  'customers',
+  'leads',
 ] as const;
 export type ExportEntity = (typeof EXPORT_ENTITIES)[number];
 export type ExportFormat = 'csv' | 'xlsx';
@@ -66,6 +70,8 @@ export class ExportService {
     @InjectModel(IntegrationLog.name) logModel: Model<IntegrationLog>,
     @InjectModel(LoginHistory.name) loginModel: Model<LoginHistory>,
     @InjectModel('AuditTrail') auditModel: Model<AuditTrail>,
+    @InjectModel(Customer.name) customerModel: Model<Customer>,
+    @InjectModel(Lead.name) leadModel: Model<Lead>,
   ) {
     this.entities = {
       admins: {
@@ -185,6 +191,53 @@ export class ExportService {
           },
           { header: 'Active', value: (r) => (r.isActive ? 'Yes' : 'No') },
           { header: 'Sort order', value: (r) => r.sortOrder },
+        ],
+      },
+      customers: {
+        permission: 'read:customer',
+        model: customerModel,
+        dateField: 'createdAt',
+        searchFields: ['name', 'mobile', 'businessName', 'email'],
+        statusField: 'status',
+        baseQuery: { isDeleted: false },
+        columns: [
+          { header: 'Mobile', value: (r) => r.mobile },
+          { header: 'Name', value: (r) => r.name },
+          { header: 'Business', value: (r) => r.businessName },
+          { header: 'Category', value: (r) => r.businessCategory },
+          { header: 'City', value: (r) => r.city },
+          { header: 'Email', value: (r) => r.email },
+          {
+            header: 'TapGro user',
+            value: (r) => (r.isTapgroUser ? 'Yes' : 'No'),
+          },
+          { header: 'TapGro ref', value: (r) => r.tapgroRef },
+          { header: 'Status', value: (r) => r.status },
+          { header: 'Joined', value: (r) => date(r.createdAt) },
+          { header: 'Last login', value: (r) => date(r.lastLogin) },
+        ],
+      },
+      leads: {
+        permission: 'read:lead',
+        model: leadModel,
+        dateField: 'receivedAt',
+        searchFields: ['name', 'mobile', 'email'],
+        statusField: 'status',
+        populate: { path: 'customer', select: 'mobile businessName' },
+        columns: [
+          { header: 'Received', value: (r) => date(r.receivedAt) },
+          {
+            header: 'Customer',
+            value: (r) => r.customer?.businessName || r.customer?.mobile,
+          },
+          { header: 'Name', value: (r) => r.name },
+          { header: 'Mobile', value: (r) => r.mobile },
+          { header: 'Email', value: (r) => r.email },
+          { header: 'Source', value: (r) => r.source },
+          { header: 'Platform', value: (r) => r.platform },
+          { header: 'Status', value: (r) => r.status },
+          { header: 'Form', value: (r) => r.formName },
+          { header: 'Follow up', value: (r) => date(r.followUpAt) },
         ],
       },
     };

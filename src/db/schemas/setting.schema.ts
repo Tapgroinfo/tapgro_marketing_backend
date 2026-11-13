@@ -100,6 +100,21 @@ export class SocialProviderSettings {
   /** Optional override of the provider's default API base URL. */
   @Prop({ type: String, default: '' })
   apiBaseUrl: string;
+
+  /** Admin panel page to return to after a channel connect (OAuth) finishes. */
+  @Prop({ type: String, default: '' })
+  panelRedirectUrl: string;
+
+  /** Customer app page (or deep link, e.g. tapgro://social) to return to after connect. */
+  @Prop({ type: String, default: '' })
+  customerRedirectUrl: string;
+
+  /** Shown on Zernio's "<brand> wants to connect" welcome screen. */
+  @Prop({ type: String, default: '' })
+  brandName: string;
+
+  @Prop({ type: String, default: '' })
+  logoUrl: string;
 }
 
 /** SMS gateway (SmartPing-style HTTP GET with DLT ids). */

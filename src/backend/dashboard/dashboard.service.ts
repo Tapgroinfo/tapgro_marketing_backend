@@ -9,6 +9,9 @@ import { SupportTicket } from '../../db/schemas/supportTicket.schema';
 import { IntegrationLog } from '../../db/schemas/integrationLog.schema';
 import { LoginHistory } from '../../db/schemas/loginHistory.schema';
 import { AuditTrail } from '../../db/schemas/auditTrail.schema';
+import { SocialChannel } from '../../db/schemas/social.schema';
+import { Customer } from '../../db/schemas/customer.schema';
+import { Lead } from '../../db/schemas/lead.schema';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -26,6 +29,10 @@ export class DashboardService {
     @InjectModel(LoginHistory.name)
     private readonly loginHistoryModel: Model<LoginHistory>,
     @InjectModel('AuditTrail') private readonly auditModel: Model<AuditTrail>,
+    @InjectModel(SocialChannel.name)
+    private readonly channelModel: Model<SocialChannel>,
+    @InjectModel(Customer.name) private readonly customerModel: Model<Customer>,
+    @InjectModel(Lead.name) private readonly leadModel: Model<Lead>,
   ) {}
 
   async summary() {
@@ -46,6 +53,7 @@ export class DashboardService {
       integrations,
       logins,
       recentActivity,
+      channels,
     ] = await Promise.all([
       this.userModel.countDocuments(notDeleted),
       this.userModel.countDocuments({ ...notDeleted, status: true }),
@@ -75,6 +83,24 @@ export class DashboardService {
         .limit(10)
         .select('-additionalDetail')
         .populate('updatedBy', 'name email'),
+      this.groupCount(this.channelModel, 'status'),
+    ]);
+
+    const [
+      customersTotal,
+      tapgroCustomers,
+      customersNew24h,
+      leadsByStatus,
+      leads24h,
+    ] = await Promise.all([
+      this.customerModel.countDocuments(notDeleted),
+      this.customerModel.countDocuments({ ...notDeleted, isTapgroUser: true }),
+      this.customerModel.countDocuments({
+        ...notDeleted,
+        createdAt: { $gte: since },
+      }),
+      this.groupCount(this.leadModel, 'status'),
+      this.leadModel.countDocuments({ receivedAt: { $gte: since } }),
     ]);
 
     return {
@@ -88,6 +114,20 @@ export class DashboardService {
         },
         roles,
         platforms: { total: platformsTotal, active: platformsActive },
+        customers: {
+          total: customersTotal,
+          tapgroUsers: tapgroCustomers,
+          newLast24h: customersNew24h,
+        },
+        leads: {
+          byStatus: leadsByStatus,
+          last24h: leads24h,
+        },
+        channels: {
+          connected: (channels.connected || 0) + (channels.warning || 0),
+          needsReconnect: channels.needs_reconnect || 0,
+          disconnected: channels.disconnected || 0,
+        },
         plans: { total: plansTotal, active: plansActive },
         support: {
           open: ticketsByStatus.open || 0,

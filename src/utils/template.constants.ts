@@ -6,6 +6,7 @@ export const TEMPLATE_SLUGS = {
   ADMIN_WELCOME: 'admin_welcome',
   SUPPORT_TICKET_RECEIVED: 'support_ticket_received',
   SUPPORT_TICKET_REPLY: 'support_ticket_reply',
+  CUSTOMER_LOGIN_OTP: 'customer_login_otp',
 } as const;
 
 /** Seeded once with isSystem=true; content stays editable by admins. */
@@ -59,6 +60,22 @@ export const DEFAULT_TEMPLATES: Array<{
     slug: TEMPLATE_SLUGS.ADMIN_PASSWORD_RESET_OTP,
     name: 'Admin password reset OTP (SMS)',
     body: 'Your {{appName}} password reset OTP is {{otp}}. Valid for {{expiryMinutes}} minutes.',
+    variables: ['appName', 'otp', 'expiryMinutes'],
+    isActive: false,
+  },
+  {
+    channel: 'sms',
+    slug: TEMPLATE_SLUGS.CUSTOMER_LOGIN_OTP,
+    name: 'Customer app login OTP (SMS)',
+    body: '{{otp}} is your {{appName}} login OTP. Valid for {{expiryMinutes}} minutes. Do not share it with anyone.',
+    variables: ['appName', 'otp', 'expiryMinutes'],
+    isActive: true,
+  },
+  {
+    channel: 'whatsapp',
+    slug: TEMPLATE_SLUGS.CUSTOMER_LOGIN_OTP,
+    name: 'Customer app login OTP (WhatsApp fallback)',
+    body: '{{otp}} is your {{appName}} login OTP.',
     variables: ['appName', 'otp', 'expiryMinutes'],
     isActive: false,
   },

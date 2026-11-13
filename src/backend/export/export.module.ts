@@ -17,6 +17,8 @@ import {
 } from '../../db/schemas/loginHistory.schema';
 import { AuditTrailSchema } from '../../db/schemas/auditTrail.schema';
 import { RoleSchema } from '../../db/schemas/role.schema';
+import { Customer, CustomerSchema } from '../../db/schemas/customer.schema';
+import { Lead, LeadSchema } from '../../db/schemas/lead.schema';
 import { ExportController } from './export.controller';
 import { ExportService } from './export.service';
 
@@ -31,6 +33,8 @@ import { ExportService } from './export.service';
       { name: IntegrationLog.name, schema: IntegrationLogSchema },
       { name: LoginHistory.name, schema: LoginHistorySchema },
       { name: 'AuditTrail', schema: AuditTrailSchema },
+      { name: Customer.name, schema: CustomerSchema },
+      { name: Lead.name, schema: LeadSchema },
     ]),
   ],
   controllers: [ExportController],

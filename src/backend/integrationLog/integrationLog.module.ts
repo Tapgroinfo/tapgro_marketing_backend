@@ -4,10 +4,8 @@ import {
   IntegrationLog,
   IntegrationLogSchema,
 } from '../../db/schemas/integrationLog.schema';
-import { SettingsModule } from '../settings/settings.module';
 import { IntegrationLogController } from './integrationLog.controller';
 import { IntegrationLogService } from './integrationLog.service';
-import { WebhookController } from './webhook.controller';
 
 @Global()
 @Module({
@@ -15,9 +13,8 @@ import { WebhookController } from './webhook.controller';
     MongooseModule.forFeature([
       { name: IntegrationLog.name, schema: IntegrationLogSchema },
     ]),
-    SettingsModule,
   ],
-  controllers: [IntegrationLogController, WebhookController],
+  controllers: [IntegrationLogController],
   providers: [IntegrationLogService],
   exports: [IntegrationLogService],
 })

@@ -14,6 +14,9 @@ import { CmsModule } from './cms/cms.module';
 import { PlanModule } from './plan/plan.module';
 import { SupportModule } from './support/support.module';
 import { ExportModule } from './export/export.module';
+import { SocialModule } from './social/social.module';
+import { CustomerModule } from './customer/customer.module';
+import { LeadModule } from './lead/lead.module';
 
 /** Admin panel `/api/backend/v1` + public `/api/public/v1` APIs */
 const BackendModules = [
@@ -22,6 +25,9 @@ const BackendModules = [
   PermissionModule,
   DashboardModule,
   PlatformModule,
+  SocialModule,
+  CustomerModule,
+  LeadModule,
   PlanModule,
   SupportModule,
   CmsModule,

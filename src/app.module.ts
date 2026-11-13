@@ -6,6 +6,7 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { LoggerModule } from 'nestjs-pino';
 import { schemas } from './db/schema';
 import { BackendModules } from './backend/module';
+import { CustomerModules } from './customer/module';
 import { GlobalServiceModule } from './backend/globalService/globalService.module';
 import { AppController } from './app.controller';
 import { DbSeederService } from './db/seeders/seeder.service';
@@ -33,6 +34,7 @@ import { DEFAULT_THROTTLE } from './utils/throttle.constants';
     MongooseModule.forFeature(schemas),
     GlobalServiceModule,
     ...BackendModules,
+    ...CustomerModules,
   ],
   controllers: [AppController],
   providers: [
