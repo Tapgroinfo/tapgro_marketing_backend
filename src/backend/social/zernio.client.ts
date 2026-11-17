@@ -74,6 +74,8 @@ export class ZernioClient {
   async createProfile(body: {
     name: string;
     description?: string;
+    color?: string;
+    timezone?: string;
     externalId: string;
   }) {
     return this.call<{ profile: { _id: string } }>(
@@ -85,7 +87,12 @@ export class ZernioClient {
 
   async updateProfile(
     profileId: string,
-    body: { name?: string; description?: string },
+    body: {
+      name?: string;
+      description?: string;
+      color?: string;
+      timezone?: string;
+    },
   ) {
     return this.call('profile.update', true, (sdk) =>
       sdk.profiles.updateProfile({ path: { profileId }, body }),

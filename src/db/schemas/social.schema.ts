@@ -14,6 +14,14 @@ export class SocialProfile {
   @Prop({ type: String, default: '' })
   description: string;
 
+  /** Accent color on Zernio (hex, e.g. #F8A5A5). */
+  @Prop({ type: String, default: '' })
+  color: string;
+
+  /** IANA timezone for scheduling (e.g. Asia/Kolkata). Empty = Zernio UTC default. */
+  @Prop({ type: String, default: '' })
+  timezone: string;
+
   /** Optional id in another TapGro system (e.g. salon id). */
   @Prop({ type: String, default: '', index: true })
   externalRef: string;

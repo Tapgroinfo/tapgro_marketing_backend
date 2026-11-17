@@ -383,13 +383,17 @@ async function testProvider() {
 }
 
 async function createProfile() {
+  const name = $('profileName').value.trim();
+  if (!name) throw new Error('Profile Name is required');
   const res = await api(
     '/api/backend/v1/social/profile',
     {
       method: 'POST',
       body: JSON.stringify({
-        name: $('profileName').value.trim(),
+        name,
         description: $('profileDesc').value.trim() || undefined,
+        color: $('profileColor').value.trim() || undefined,
+        timezone: $('profileTimezone').value || undefined,
       }),
     },
     'admin',
@@ -548,6 +552,19 @@ function wire() {
   $('btnAdminLogout').onclick = adminLogout;
   $('btnSaveAdminToken').onclick = saveAdminToken;
   $('btnTestProvider').onclick = wrap(testProvider);
+  const colorPicker = $('profileColorPicker');
+  const colorText = $('profileColor');
+  if (colorPicker && colorText) {
+    colorPicker.addEventListener('input', () => {
+      colorText.value = colorPicker.value.toUpperCase();
+    });
+    colorText.addEventListener('change', () => {
+      if (/^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/.test(colorText.value.trim())) {
+        colorPicker.value = colorText.value.trim();
+      }
+    });
+  }
+
   $('btnCreateProfile').onclick = wrap(createProfile);
   $('btnListProfiles').onclick = wrap(listProfiles);
   $('btnAdminConnect').onclick = wrap(adminConnect);

@@ -9,6 +9,10 @@ import {
   SocialProfileSchema,
 } from '../../db/schemas/social.schema';
 import { Platform, PlatformSchema } from '../../db/schemas/platform.schema';
+import {
+  Customer,
+  CustomerSchema,
+} from '../../db/schemas/customer.schema';
 import { SettingsModule } from '../settings/settings.module';
 import { LeadModule } from '../lead/lead.module';
 import { SocialController, SocialPublicController } from './social.controller';
@@ -23,6 +27,7 @@ import { ZernioClient } from './zernio.client';
       { name: SocialChannel.name, schema: SocialChannelSchema },
       { name: SocialConnectSession.name, schema: SocialConnectSessionSchema },
       { name: Platform.name, schema: PlatformSchema },
+      { name: Customer.name, schema: CustomerSchema },
     ]),
     SettingsModule,
     LeadModule,

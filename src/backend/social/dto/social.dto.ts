@@ -2,26 +2,55 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsBoolean,
   IsIn,
+  IsMongoId,
   IsNotEmpty,
   IsOptional,
   IsString,
   IsUrl,
+  Matches,
   MaxLength,
   ValidateIf,
 } from 'class-validator';
 
 export class CreateSocialProfileDto {
-  @ApiProperty({ example: 'Glow Salon — Andheri' })
+  @ApiProperty({
+    example: 'Glow Salon — Andheri',
+    description: 'Required. Same as Zernio “Profile Name”.',
+  })
   @IsNotEmpty()
   @IsString()
   @MaxLength(100)
   name: string;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({
+    example: 'Pilot salon in Andheri',
+    description: 'Optional description (Zernio description).',
+  })
   @IsOptional()
   @IsString()
   @MaxLength(500)
   description?: string;
+
+  @ApiPropertyOptional({
+    example: '#F8A5A5',
+    description: 'Optional accent color hex (Zernio color picker).',
+  })
+  @IsOptional()
+  @IsString()
+  @Matches(/^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/, {
+    message: 'color must be a hex like #F8A5A5',
+  })
+  color?: string;
+
+  @ApiPropertyOptional({
+    example: 'Asia/Kolkata',
+    description:
+      'IANA timezone for new posts (Zernio default timezone). Asia/Calcutta is accepted as an alias of Asia/Kolkata.',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  timezone?: string;
 
   @ApiPropertyOptional({
     description: 'Id in another TapGro system (e.g. salon id)',
@@ -29,6 +58,15 @@ export class CreateSocialProfileDto {
   @IsOptional()
   @IsString()
   externalRef?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Link this Zernio profile to a customer-app user (one profile per customer).',
+    example: '665f1c0a9e2b5af0012ab34cd',
+  })
+  @IsOptional()
+  @IsMongoId()
+  customerId?: string;
 }
 
 export class UpdateSocialProfileDto {
@@ -45,6 +83,20 @@ export class UpdateSocialProfileDto {
   @MaxLength(500)
   description?: string;
 
+  @ApiPropertyOptional({ example: '#F8A5A5' })
+  @IsOptional()
+  @IsString()
+  @Matches(/^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/, {
+    message: 'color must be a hex like #F8A5A5',
+  })
+  color?: string;
+
+  @ApiPropertyOptional({ example: 'Asia/Kolkata' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  timezone?: string;
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
@@ -54,6 +106,16 @@ export class UpdateSocialProfileDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'Attach / reassign the profile to a customer. Send null to unlink.',
+    nullable: true,
+  })
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null && v !== undefined && v !== '')
+  @IsMongoId()
+  customerId?: string | null;
 }
 
 export class ConnectChannelDto {

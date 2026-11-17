@@ -76,6 +76,7 @@ export class SocialController {
   @PaginationDecorator()
   @ApiQuery({ name: 'sort', required: false, enum: Sort })
   @ApiQuery({ name: 'isActive', required: false, type: Boolean })
+  @ApiQuery({ name: 'customerId', required: false, type: String })
   async profiles(
     @Query('limit') limit?: number,
     @Query('page') page?: number,
@@ -84,6 +85,7 @@ export class SocialController {
     @Query('sort') sort?: Sort,
     @Query('isActive', new ParseBoolPipe({ optional: true }))
     isActive?: boolean,
+    @Query('customerId') customerId?: string,
   ) {
     const result = await this.socialService.findProfiles({
       limit,
@@ -92,6 +94,7 @@ export class SocialController {
       sort_attr,
       sort,
       isActive,
+      customerId,
     });
     return { success: true, ...result };
   }
@@ -100,7 +103,8 @@ export class SocialController {
   @Post('profile')
   @ApiOperation({
     summary: 'Create a social profile (brand / salon)',
-    description: 'Creates the matching Zernio profile.',
+    description:
+      'Same fields as Zernio “Create new profile”: name (required), description, color (#hex), timezone (IANA, e.g. Asia/Kolkata). Also creates the matching Zernio profile.',
   })
   createProfile(
     @Body() dto: CreateSocialProfileDto,
@@ -163,6 +167,39 @@ export class SocialController {
     return this.socialService.startConnect(id, dto.platform, {
       userId: authUser.id,
     });
+  }
+
+  @RequirePermissions('create:channel')
+  @Post('customers/:customerId/ensure-profile')
+  @ApiOperation({
+    summary: 'Ensure customer has a Zernio social profile',
+    description:
+      'Manager panel helper. Creates a linked profile if the customer has none.',
+  })
+  ensureCustomerProfile(
+    @Param('customerId') customerId: string,
+    @AuthAdmin() authUser: any,
+  ) {
+    return this.socialService.ensureCustomerProfile(customerId, authUser.id);
+  }
+
+  @RequirePermissions('create:channel')
+  @Post('customers/:customerId/connect')
+  @ApiOperation({
+    summary: 'Connect a platform for a customer (manager assist)',
+    description:
+      'Creates the customer social profile if missing, then returns authUrl. OAuth returns to panelRedirectUrl — open it in a new tab while helping the salon.',
+  })
+  connectForCustomer(
+    @Param('customerId') customerId: string,
+    @Body() dto: ConnectChannelDto,
+    @AuthAdmin() authUser: any,
+  ) {
+    return this.socialService.startConnectForCustomer(
+      customerId,
+      dto.platform,
+      authUser.id,
+    );
   }
 
   @RequirePermissions('read:channel')

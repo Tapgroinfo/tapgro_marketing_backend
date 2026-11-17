@@ -17,6 +17,7 @@ import {
   SocialProfileDocument,
 } from '../../db/schemas/social.schema';
 import { Platform } from '../../db/schemas/platform.schema';
+import { Customer } from '../../db/schemas/customer.schema';
 import { GlobalService } from '../globalService/global.service';
 import { SettingsService } from '../settings/settings.service';
 import { NotificationService } from '../notification/notification.service';
@@ -69,6 +70,7 @@ export class SocialService {
     @InjectModel(SocialConnectSession.name)
     private readonly sessionModel: Model<SocialConnectSession>,
     @InjectModel(Platform.name) private readonly platformModel: Model<Platform>,
+    @InjectModel(Customer.name) private readonly customerModel: Model<Customer>,
     private readonly zernio: ZernioClient,
     private readonly settingsService: SettingsService,
     private readonly configService: ConfigService,
@@ -114,10 +116,18 @@ export class SocialService {
     customerId?: string,
   ) {
     await this.assertProfileNameFree(dto.name);
+    const linkedCustomerId = customerId || dto.customerId;
+    if (linkedCustomerId) {
+      await this.assertCustomerExists(linkedCustomerId);
+      await this.assertCustomerProfileFree(linkedCustomerId);
+    }
     const id = new Types.ObjectId();
+    const timezone = this.normalizeTimezone(dto.timezone);
     const zernio = await this.zernio.createProfile({
       name: dto.name,
       description: dto.description,
+      color: dto.color,
+      timezone: timezone || undefined,
       externalId: id.toString(),
     });
 
@@ -125,10 +135,14 @@ export class SocialService {
       _id: id,
       name: dto.name,
       description: dto.description || '',
-      externalRef: dto.externalRef || '',
+      color: dto.color || '',
+      timezone: timezone || '',
+      externalRef:
+        dto.externalRef ||
+        (linkedCustomerId ? `customer:${linkedCustomerId}` : ''),
       provider: 'zernio',
       providerProfileId: zernio.profile._id,
-      ...(customerId ? { customer: customerId } : {}),
+      ...(linkedCustomerId ? { customer: linkedCustomerId } : {}),
     });
     await this.audit(
       user_id,
@@ -195,13 +209,41 @@ export class SocialService {
     if (dto.name && dto.name !== profile.name) {
       await this.assertProfileNameFree(dto.name, id);
     }
-    if (dto.name !== undefined || dto.description !== undefined) {
+    const timezone =
+      dto.timezone !== undefined
+        ? this.normalizeTimezone(dto.timezone)
+        : undefined;
+    if (
+      dto.name !== undefined ||
+      dto.description !== undefined ||
+      dto.color !== undefined ||
+      dto.timezone !== undefined
+    ) {
       await this.zernio.updateProfile(profile.providerProfileId, {
         name: dto.name,
         description: dto.description,
+        color: dto.color,
+        timezone: timezone || undefined,
       });
     }
-    profile.set(dto);
+    const { customerId, timezone: _tz, ...rest } = dto;
+    profile.set(rest);
+    if (dto.timezone !== undefined) {
+      profile.timezone = timezone || '';
+    }
+    if (customerId !== undefined) {
+      if (customerId === null || customerId === '') {
+        profile.customer = undefined;
+        profile.markModified('customer');
+      } else {
+        await this.assertCustomerExists(customerId);
+        await this.assertCustomerProfileFree(customerId, id);
+        profile.customer = new Types.ObjectId(customerId);
+        if (!profile.externalRef) {
+          profile.externalRef = `customer:${customerId}`;
+        }
+      }
+    }
     await profile.save();
     await this.audit(
       user_id,
@@ -210,6 +252,49 @@ export class SocialService {
       profile,
     );
     return { success: true, message: 'Social profile updated', data: profile };
+  }
+
+  /**
+   * Manager panel: ensure the customer has a Zernio profile (create if missing).
+   */
+  async ensureCustomerProfile(customerId: string, adminId: string) {
+    const customer = await this.assertCustomerExists(customerId);
+    const existing = await this.profileModel.findOne({ customer: customerId });
+    if (existing) {
+      return {
+        success: true,
+        message: 'Customer already has a social profile',
+        data: existing,
+        created: false,
+      };
+    }
+    const label = customer.businessName || customer.name || 'Customer';
+    const created = await this.createProfile(
+      {
+        name: `${label} · ${customer.mobile}`,
+        description: 'Created by manager panel',
+        externalRef: `customer:${customer.id}`,
+        customerId: customer.id,
+      },
+      adminId,
+      customer.id,
+    );
+    return { ...created, created: true };
+  }
+
+  /**
+   * Manager panel: open OAuth for a customer (creates profile if needed).
+   * Returns authUrl — browser returns to panelRedirectUrl.
+   */
+  async startConnectForCustomer(
+    customerId: string,
+    platform: string,
+    adminId: string,
+  ) {
+    const ensured = await this.ensureCustomerProfile(customerId, adminId);
+    const profile = ensured.data;
+    // Do not set session.customer — manager OAuth must return to panelRedirectUrl.
+    return this.startConnect(profile.id, platform, { userId: adminId });
   }
 
   async deleteProfile(id: string, user_id: string) {
@@ -239,9 +324,17 @@ export class SocialService {
     return { success: true, message: 'Social profile deleted' };
   }
 
-  async findProfiles(filter: Pagination & { isActive?: boolean }) {
+  async findProfiles(
+    filter: Pagination & { isActive?: boolean; customerId?: string },
+  ) {
     const query: Record<string, unknown> = {};
     if (filter.isActive !== undefined) query.isActive = filter.isActive;
+    if (filter.customerId) {
+      if (!Types.ObjectId.isValid(filter.customerId)) {
+        throw new BadRequestException('Invalid customerId');
+      }
+      query.customer = filter.customerId;
+    }
     if (filter.search) {
       query.$or = [
         { name: { $regex: filter.search, $options: 'i' } },
@@ -903,6 +996,41 @@ export class SocialService {
       );
     }
     return url;
+  }
+
+  /** Map common aliases (Asia/Calcutta) to IANA names Zernio accepts. */
+  private normalizeTimezone(value?: string | null): string {
+    const raw = (value || '').trim();
+    if (!raw) return '';
+    if (raw === 'Asia/Calcutta') return 'Asia/Kolkata';
+    return raw;
+  }
+
+  private async assertCustomerExists(customerId: string) {
+    if (!Types.ObjectId.isValid(customerId)) {
+      throw new BadRequestException('Invalid customerId');
+    }
+    const customer = await this.customerModel.findOne({
+      _id: customerId,
+      isDeleted: false,
+    });
+    if (!customer) {
+      throw new NotFoundException('Customer not found');
+    }
+    return customer;
+  }
+
+  private async assertCustomerProfileFree(
+    customerId: string,
+    exceptProfileId?: string,
+  ) {
+    const query: Record<string, unknown> = { customer: customerId };
+    if (exceptProfileId) query._id = { $ne: exceptProfileId };
+    if (await this.profileModel.exists(query)) {
+      throw new BadRequestException(
+        'This customer already has a social profile',
+      );
+    }
   }
 
   private async assertProfileNameFree(name: string, exceptId?: string) {
