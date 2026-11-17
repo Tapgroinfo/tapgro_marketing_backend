@@ -288,65 +288,40 @@
         <section class="panel" id="sdk">
           <div class="panel-head">
             <div>
-              <h2>Why we don’t use <code>@zernio/node</code> yet</h2>
-              <p>Our Nest <code>ZernioClient</code> is a thin REST wrapper so the API key, logs, and errors stay inside TapGro.</p>
+              <h2><code>@zernio/node</code> is wired in</h2>
+              <p><code>ZernioClient</code> wraps the official SDK. TapGro APIs are unchanged — key, logs, and Nest errors stay in our wrapper.</p>
             </div>
           </div>
           <div class="guide">
             <div class="guide-card">
-              <h3>Current approach</h3>
+              <h3>What we kept</h3>
               <ul>
-                <li>API key from <code>settings.socialProvider.apiKey</code> (DB), not only env</li>
-                <li>Every write logged to Integration Logs</li>
-                <li>Errors mapped to Nest HTTP exceptions</li>
-                <li>Same service used by Admin + Customer portals</li>
+                <li>API key from <code>settings.socialProvider.apiKey</code> (DB)</li>
+                <li>Integration Logs on writes / failures</li>
+                <li>Nest HTTP exception mapping</li>
+                <li>Same SocialService method signatures</li>
               </ul>
             </div>
             <div class="guide-card">
-              <h3>When to adopt the SDK</h3>
+              <h3>What the SDK adds</h3>
               <ul>
-                <li>Posts / comments / inbox / analytics (typed methods)</li>
-                <li>Less hand-written path strings</li>
-                <li>Built-in <code>RateLimitError</code> / <code>ValidationError</code></li>
+                <li>Typed profiles / connect / accounts / posts</li>
+                <li><code>ZernioApiError</code>, <code>RateLimitError</code>, <code>ValidationError</code></li>
+                <li><code>zernioClient.getSdk()</code> for comments / inbox next</li>
               </ul>
             </div>
             <div class="guide-card wide">
-              <h3>How to use the model (SDK) later</h3>
-              <pre class="codeblock">npm install @zernio/node
+              <h3>Phase 3 pattern (inside Nest)</h3>
+              <pre class="codeblock">// Prefer existing wrappers:
+await this.zernio.createProfile({ name, description, externalId });
+await this.zernio.getConnectUrl('instagram', { profileId, redirect_url });
 
-import Zernio from '@zernio/node';
-
-// Prefer injecting apiKey from SettingsService — do not rely only on env in Nest
-const zernio = new Zernio({
-  apiKey: settings.apiKey,          // from DB
-  baseURL: 'https://zernio.com/api',
-  timeout: 60000,
-});
-
-// 1) Profile (one per salon / customer)
-const { data: created } = await zernio.profiles.createProfile({
-  body: { name: 'Glow Salon', externalId: 'customer:64f…' },
-});
-const profileId = created.profile._id;
-
-// 2) Connect Instagram / Google / Facebook
-const { data: connect } = await zernio.connect.getConnectUrl({
-  path: { platform: 'instagram' }, // googlebusiness | facebook
-  query: { profileId, redirect_url: 'https://api…/callback' },
-});
-// open connect.authUrl in browser
-
-// 3) List accounts → post / comments / DMs
-const { data: listed } = await zernio.accounts.listAccounts({ query: { profileId } });
-await zernio.posts.createPost({
-  body: {
-    content: 'Hello',
-    mediaItems: [{ type: 'image', url: 'https://…' }],
-    platforms: [{ platform: 'instagram', accountId: listed.accounts[0]._id }],
-    publishNow: true,
-  },
+// Or raw SDK for new surfaces (comments / DMs):
+const sdk = await this.zernio.getSdk();
+const { data } = await sdk.comments.listInboxComments({
+  query: { profileId, limit: 20 },
 });</pre>
-              <p class="note">Docs: <a href="https://docs.zernio.com/sdks/node" target="_blank" rel="noopener">docs.zernio.com/sdks/node</a> · Keep Nest wrapper; call SDK inside <code>ZernioClient</code> when we expand posts/inbox.</p>
+              <p class="note">Docs: <a href="https://docs.zernio.com/sdks/node" target="_blank" rel="noopener">docs.zernio.com/sdks/node</a></p>
             </div>
           </div>
         </section>

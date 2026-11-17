@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  HttpException,
   Injectable,
   Logger,
   NotFoundException,
@@ -710,7 +711,12 @@ export class SocialService {
       try {
         await this.zernio.disconnectAccount(channel.providerAccountId);
       } catch (error) {
-        if ((error as { status?: number }).status !== 404) throw error;
+        const status =
+          error instanceof HttpException
+            ? error.getStatus()
+            : (error as { status?: number; statusCode?: number }).statusCode ||
+              (error as { status?: number }).status;
+        if (status !== 404) throw error;
       }
     }
     channel.set({
