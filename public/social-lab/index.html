@@ -1,0 +1,358 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TapGro · Social Connect Lab</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Source+Sans+3:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="./lab.css" />
+</head>
+<body>
+  <div class="app">
+    <aside class="rail">
+      <div class="rail-brand">
+        <div class="logo">TG</div>
+        <div>
+          <strong>Social Lab</strong>
+          <span>Zernio connect tester</span>
+        </div>
+      </div>
+
+      <nav class="rail-nav">
+        <button type="button" class="rail-link active" data-jump="setup">Setup</button>
+        <button type="button" class="rail-link" data-jump="auth">Auth</button>
+        <button type="button" class="rail-link" data-jump="platforms">Platforms</button>
+        <button type="button" class="rail-link" data-jump="channels">Channels</button>
+        <button type="button" class="rail-link" data-jump="publish">Publish test</button>
+        <button type="button" class="rail-link" data-jump="log">API log</button>
+        <button type="button" class="rail-link" data-jump="sdk">SDK guide</button>
+      </nav>
+
+      <div class="rail-foot">
+        <div class="env-pill" id="envPill">local</div>
+        <p>Use this page only for backend QA. Not a production UI.</p>
+      </div>
+    </aside>
+
+    <div class="workspace">
+      <header class="topbar">
+        <div>
+          <h1>Social Connect Lab</h1>
+          <p class="sub">Enterprise backend harness · Instagram · Google Business · Facebook / Meta</p>
+        </div>
+        <div class="top-actions">
+          <div class="seg" role="tablist">
+            <button type="button" class="seg-btn active" data-mode="customer">Customer API</button>
+            <button type="button" class="seg-btn" data-mode="admin">Admin API</button>
+          </div>
+          <a class="ghost-link" href="/swagger/customer" target="_blank" rel="noopener">Customer Swagger</a>
+          <a class="ghost-link" href="/swagger/backend" target="_blank" rel="noopener">Admin Swagger</a>
+        </div>
+      </header>
+
+      <div id="returnBanner" class="toast hidden" role="status"></div>
+
+      <main class="content">
+        <section class="panel" id="setup">
+          <div class="panel-head">
+            <div>
+              <h2>1 · Environment</h2>
+              <p>Point the lab at your Nest server and mirror these values in Settings.</p>
+            </div>
+            <code class="chip">APP_BASE_URL</code>
+          </div>
+          <div class="form-grid">
+            <label class="field">
+              <span>Backend origin</span>
+              <input id="apiBase" placeholder="http://localhost:3001" />
+            </label>
+          </div>
+          <div class="checklist">
+            <div class="check-item">
+              <span class="dot"></span>
+              <div>
+                <strong>Redirect URL</strong>
+                <code id="labUrlHint"></code>
+                <small>Set <code>socialProvider.customerRedirectUrl</code> + <code>panelRedirectUrl</code> to this exact URL.</small>
+              </div>
+            </div>
+            <div class="check-item">
+              <span class="dot"></span>
+              <div>
+                <strong>OTP test mode</strong>
+                <small><code>CUSTOMER_OTP_TEST_MODE=true</code> so Send OTP returns <code>devOtp</code>.</small>
+              </div>
+            </div>
+            <div class="check-item">
+              <span class="dot"></span>
+              <div>
+                <strong>Zernio key</strong>
+                <small>Settings → <code>socialProvider.enabled=true</code>, <code>provider=zernio</code>, paste API key.</small>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- CUSTOMER -->
+        <div id="customerMode" class="stack">
+          <section class="panel" id="auth">
+            <div class="panel-head">
+              <div>
+                <h2>2 · Customer OTP</h2>
+                <p>Creates / logs in a salon account and issues a customer JWT.</p>
+              </div>
+              <div class="endpoint-stack">
+                <code class="chip">POST /api/customer/v1/auth/send-otp</code>
+                <code class="chip">POST /api/customer/v1/auth/verify-otp</code>
+              </div>
+            </div>
+            <div class="form-grid two">
+              <label class="field">
+                <span>Mobile</span>
+                <input id="mobile" value="9876543210" maxlength="14" />
+              </label>
+              <label class="field">
+                <span>OTP</span>
+                <input id="otp" placeholder="Auto-filled in test mode" maxlength="6" />
+              </label>
+              <label class="field">
+                <span>Name (first signup)</span>
+                <input id="name" value="Test Salon Owner" />
+              </label>
+              <label class="field">
+                <span>Business name</span>
+                <input id="businessName" value="TapGro Test Salon" />
+              </label>
+            </div>
+            <div class="actions">
+              <button type="button" class="btn primary" id="btnSendOtp">Send OTP</button>
+              <button type="button" class="btn success" id="btnVerifyOtp">Verify &amp; login</button>
+              <button type="button" class="btn ghost" id="btnLogout">Logout</button>
+            </div>
+            <p class="who" id="customerWho">Not logged in</p>
+          </section>
+
+          <section class="panel" id="platforms">
+            <div class="panel-head">
+              <div>
+                <h2>3 · Platforms</h2>
+                <p>Active platforms + connect OAuth (opens Zernio authUrl).</p>
+              </div>
+              <div class="endpoint-stack">
+                <code class="chip">GET /platforms</code>
+                <code class="chip">POST /channels/connect</code>
+              </div>
+            </div>
+            <div class="actions">
+              <button type="button" class="btn ghost" id="btnLoadPlatforms">Refresh platforms</button>
+              <button type="button" class="btn ghost" id="btnLoadChannels">Refresh channels</button>
+              <button type="button" class="btn ghost" id="btnSync">Sync health</button>
+            </div>
+            <div id="platformsList" class="list empty-state">Login first, then refresh platforms.</div>
+          </section>
+
+          <section class="panel" id="channels">
+            <div class="panel-head">
+              <div>
+                <h2>4 · Channels</h2>
+                <p>Connected accounts for this customer’s Zernio profile.</p>
+              </div>
+              <code class="chip">GET /channels</code>
+            </div>
+            <div id="channelsList" class="list empty-state">No channels yet.</div>
+            <div class="actions">
+              <button type="button" class="btn ghost" id="btnHealthAll" disabled>Health-check all</button>
+            </div>
+          </section>
+        </div>
+
+        <!-- ADMIN -->
+        <div id="adminMode" class="stack hidden">
+          <section class="panel" id="adminAuth">
+            <div class="panel-head">
+              <div>
+                <h2>2 · Admin session</h2>
+                <p>Use admin JWT to create profiles and test the provider key.</p>
+              </div>
+              <code class="chip">POST /api/backend/v1/adminLogin</code>
+            </div>
+            <div class="form-grid two">
+              <label class="field">
+                <span>Email</span>
+                <input id="adminEmail" placeholder="admin@tapgro.com" />
+              </label>
+              <label class="field">
+                <span>Password</span>
+                <input id="adminPassword" type="password" />
+              </label>
+            </div>
+            <div class="actions">
+              <button type="button" class="btn primary" id="btnAdminLogin">Login admin</button>
+              <button type="button" class="btn ghost" id="btnAdminLogout">Clear token</button>
+              <button type="button" class="btn ghost" id="btnTestProvider">Test Zernio provider</button>
+            </div>
+            <label class="field" style="margin-top:14px">
+              <span>Or paste admin JWT</span>
+              <textarea id="adminTokenPaste" placeholder="eyJ..."></textarea>
+            </label>
+            <div class="actions">
+              <button type="button" class="btn ghost" id="btnSaveAdminToken">Use pasted token</button>
+            </div>
+            <p class="who" id="adminWho">Not logged in</p>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head">
+              <div>
+                <h2>3 · Profile &amp; connect</h2>
+                <p>Admin creates a Zernio profile, then starts OAuth for a platform.</p>
+              </div>
+              <div class="endpoint-stack">
+                <code class="chip">POST /social/profile</code>
+                <code class="chip">POST /social/profile/:id/connect</code>
+              </div>
+            </div>
+            <div class="form-grid two">
+              <label class="field">
+                <span>Profile name</span>
+                <input id="profileName" value="TapGro Internal Pilot" />
+              </label>
+              <label class="field">
+                <span>Description</span>
+                <input id="profileDesc" value="Lab test profile" />
+              </label>
+              <label class="field">
+                <span>Profile id</span>
+                <input id="profileId" placeholder="Mongo id" />
+              </label>
+              <label class="field">
+                <span>Platform</span>
+                <select id="adminPlatform">
+                  <option value="instagram">instagram</option>
+                  <option value="google_business">google_business</option>
+                  <option value="facebook">facebook</option>
+                  <option value="meta_ads">meta_ads</option>
+                </select>
+              </label>
+            </div>
+            <div class="actions">
+              <button type="button" class="btn primary" id="btnCreateProfile">Create profile</button>
+              <button type="button" class="btn ghost" id="btnListProfiles">List profiles</button>
+              <button type="button" class="btn success" id="btnAdminConnect">Connect platform</button>
+              <button type="button" class="btn ghost" id="btnAdminSyncProfile">Sync profile</button>
+            </div>
+            <div id="adminProfiles" class="list empty-state" style="margin-top:12px">Profiles appear here.</div>
+          </section>
+        </div>
+
+        <section class="panel" id="publish">
+          <div class="panel-head">
+            <div>
+              <h2>5 · Publish test <em>(live)</em></h2>
+              <p>Runs a real post on the connected channel. Prefer Health first.</p>
+            </div>
+            <code class="chip">POST …/channels/:id/test</code>
+          </div>
+          <div class="form-grid two">
+            <label class="field">
+              <span>Channel id</span>
+              <input id="testChannelId" placeholder="Paste or click Use for post" />
+            </label>
+            <label class="field">
+              <span>Caption</span>
+              <input id="testContent" value="TapGro social lab test post" />
+            </label>
+            <label class="field span-2">
+              <span>Media URL (required for Instagram)</span>
+              <input id="testMediaUrl" placeholder="https://cdn.example.com/image.jpg" />
+            </label>
+          </div>
+          <div class="actions">
+            <button type="button" class="btn danger" id="btnTestPost">Publish real test post</button>
+          </div>
+        </section>
+
+        <section class="panel" id="log">
+          <div class="panel-head">
+            <div>
+              <h2>API log</h2>
+              <p>Raw request / response for debugging.</p>
+            </div>
+            <button type="button" class="btn ghost" id="btnClearLog">Clear</button>
+          </div>
+          <pre id="apiLog" class="log"></pre>
+        </section>
+
+        <section class="panel" id="sdk">
+          <div class="panel-head">
+            <div>
+              <h2>Why we don’t use <code>@zernio/node</code> yet</h2>
+              <p>Our Nest <code>ZernioClient</code> is a thin REST wrapper so the API key, logs, and errors stay inside TapGro.</p>
+            </div>
+          </div>
+          <div class="guide">
+            <div class="guide-card">
+              <h3>Current approach</h3>
+              <ul>
+                <li>API key from <code>settings.socialProvider.apiKey</code> (DB), not only env</li>
+                <li>Every write logged to Integration Logs</li>
+                <li>Errors mapped to Nest HTTP exceptions</li>
+                <li>Same service used by Admin + Customer portals</li>
+              </ul>
+            </div>
+            <div class="guide-card">
+              <h3>When to adopt the SDK</h3>
+              <ul>
+                <li>Posts / comments / inbox / analytics (typed methods)</li>
+                <li>Less hand-written path strings</li>
+                <li>Built-in <code>RateLimitError</code> / <code>ValidationError</code></li>
+              </ul>
+            </div>
+            <div class="guide-card wide">
+              <h3>How to use the model (SDK) later</h3>
+              <pre class="codeblock">npm install @zernio/node
+
+import Zernio from '@zernio/node';
+
+// Prefer injecting apiKey from SettingsService — do not rely only on env in Nest
+const zernio = new Zernio({
+  apiKey: settings.apiKey,          // from DB
+  baseURL: 'https://zernio.com/api',
+  timeout: 60000,
+});
+
+// 1) Profile (one per salon / customer)
+const { data: created } = await zernio.profiles.createProfile({
+  body: { name: 'Glow Salon', externalId: 'customer:64f…' },
+});
+const profileId = created.profile._id;
+
+// 2) Connect Instagram / Google / Facebook
+const { data: connect } = await zernio.connect.getConnectUrl({
+  path: { platform: 'instagram' }, // googlebusiness | facebook
+  query: { profileId, redirect_url: 'https://api…/callback' },
+});
+// open connect.authUrl in browser
+
+// 3) List accounts → post / comments / DMs
+const { data: listed } = await zernio.accounts.listAccounts({ query: { profileId } });
+await zernio.posts.createPost({
+  body: {
+    content: 'Hello',
+    mediaItems: [{ type: 'image', url: 'https://…' }],
+    platforms: [{ platform: 'instagram', accountId: listed.accounts[0]._id }],
+    publishNow: true,
+  },
+});</pre>
+              <p class="note">Docs: <a href="https://docs.zernio.com/sdks/node" target="_blank" rel="noopener">docs.zernio.com/sdks/node</a> · Keep Nest wrapper; call SDK inside <code>ZernioClient</code> when we expand posts/inbox.</p>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+  <script src="./lab.js"></script>
+</body>
+</html>

@@ -60,6 +60,11 @@ async function bootstrap() {
     prefix: `/${LOCAL_UPLOAD_DIR}/`,
   });
 
+  // Backend testing UI for Zernio connect (Instagram / Google / Facebook)
+  app.useStaticAssets(join(process.cwd(), 'public', 'social-lab'), {
+    prefix: '/test/social',
+  });
+
   // Includes the raw spec routes (-json / -yaml), which Swagger serves separately
   app.use(
     ['backend', 'customer'].flatMap((doc) => [
@@ -131,8 +136,14 @@ async function bootstrap() {
     swaggerOptions,
   );
 
-  // Allow the panel / websites on other origins to load /uploads images
-  app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
+  // Allow the panel / websites on other origins to load /uploads images.
+  // CSP off so /test/social lab can load its local script.
+  app.use(
+    helmet({
+      crossOriginResourcePolicy: { policy: 'cross-origin' },
+      contentSecurityPolicy: false,
+    }),
+  );
   app.use(compression());
 
   await app.listen(port);
@@ -143,6 +154,9 @@ async function bootstrap() {
   );
   console.log(
     `📗 Customer Swagger URL: http://localhost:${port}/swagger/customer`,
+  );
+  console.log(
+    `🧪 Social Connect Lab: http://localhost:${port}/test/social/`,
   );
 }
 
